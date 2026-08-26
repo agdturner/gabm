@@ -34,9 +34,7 @@ python3 --version
 If you use [Conda](https://conda.org/) which is distributed with [Anaconda](https://www.anaconda.com/), [Miniconda](https://docs.conda.io/en/latest/miniconda.html), or [Miniforge](https://github.com/conda-forge/miniforge), you can set up GABM in a new environment as follows:
 
 ```bash
-conda create -n gabm
-conda activate gabm
-conda install python=3.12
+conda create -n gabm-calder -y --no-default-packages python=3.14
 pip install gabm==0.2.18
 ```
 
@@ -47,7 +45,7 @@ conda list -e > requirements.txt
 ```
 
 
-#### Using Python >=3.12
+#### Using Python >=3.14
 
 Install from [PyPI](https://pypi.org/) using [Pip](https://pypi.org/project/pip/) as follows:
 
