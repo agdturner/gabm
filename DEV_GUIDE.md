@@ -114,6 +114,14 @@ Please add or update tests when modifying or adding features. Aim for high test 
 
 Mark slow or resource-intensive tests with `@pytest.mark.slow` and set a timeout if needed (e.g., `@pytest.mark.timeout()`).
 
+### Test Data and Fixtures
+
+Store test-only fixture files under `tests/data/` (for example, `tests/data/input/`).
+
+Do not place test fixtures in `data/`, as that directory is intended for runtime/demo inputs and generated logs.
+
+When tests need file-based inputs, prefer paths under `tests/data/` so tests are self-contained and do not depend on mutable runtime data.
+
 ### Local LLM Tests
 
 Tests for local LLMs (e.g., Apertus) are marked as slow and excluded by default as these tests require significant hardware resources (GPU recommended). On CPU-only machines, inference may be extremely slow or impractical.

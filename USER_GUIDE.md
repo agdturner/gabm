@@ -2,20 +2,12 @@
 
 
 ## Table of Contents
-- [Overview](#overview)
 - [Getting Started](#getting-started)
 - [Run the Main Program](#run-the-main-program)
 - [Managing Logs and Caches](#managing-logs-and-caches)
 - [Using LLM Modules](#using-llm-modules)
 - [Troubleshooting](#troubleshooting)
 - [Additional Resources](#additional-resources)
-
-
-## Overview
-
-This guide helps users get started with GABM, find documentation, and get support. Documentation will be updated as more features and configuration options are added.
-
-In the rest of the document "you" means you as a GABM user.
 
 
 ## Getting Started
@@ -58,7 +50,7 @@ pip install --upgrade pip
 pip install gabm==0.2.18
 ```
 
-You can then check installed dependencies with:
+Once installed you can check installed dependencies and create a requirements file:
 
 ```bash
 pip freeze > requirements.txt
@@ -225,3 +217,4 @@ If you encounter errors, check your Python version and that all dependencies are
 
 - [README.md](README.md)
 - [Reported Issues](https://github.com/compolis/GABM/issues)
+- [Running Apertus on the University of Leeds Calder High Performance Computing system](RunningApertusOnCalder.md)

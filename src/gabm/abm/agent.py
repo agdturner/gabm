@@ -35,13 +35,13 @@ class AgentID(GABMID):
     Attributes:
         id (int): The unique identifier for the agent.
     """
-    def __init__(self, agent_id: int):
+    def __init__(self, id: int):
         """
         Initialize
         Args:
-            agent_id (int): The unique identifier for the agent.
+            id (int): The unique identifier for the agent.
         """
-        super().__init__(agent_id)
+        super().__init__(id)
 
 class Agent():
     """
@@ -50,21 +50,25 @@ class Agent():
     under TYPE_CHECKING to avoid circular imports.
 
     Attributes:
-        agent_id (AgentID):
+        id (AgentID):
             Unique identifier for the Agent instance.
         environment (Environment):
             The Environment the Agent instance belongs to.
         groups (Set[Group]):
             A Set of Groups that the Agent instance belongs to.
     """
-    def __init__(self, agent_id: AgentID, environment: "Environment"):
+    def __init__(self, id: int | AgentID, environment: "Environment"):
         """
         Initialize.
         Args:
             agent_id: Unique identifier for the Agent instance.
             environment: The shared environment the Agent instance belongs to.
         """
-        self.id = agent_id
+        if isinstance(id, int):
+            self.id = AgentID(id)
+        elif not isinstance(id, AgentID):
+            raise TypeError("agent_id must be an int or an AgentID")
+        self.id = id
         self.environment = environment
         self.groups: Set['Group'] = set()
 
@@ -108,14 +112,14 @@ class PersonID(AgentID):
     """
     Person ID
     """
-    def __init__(self, agent_id: int):
+    def __init__(self, id: int):
         """
         Initialize.
 
         Args:
-            agent_id: Unique identifier for the Person instance.
+            id: Unique identifier for the Person instance.
         """
-        super().__init__(agent_id)
+        super().__init__(id)
 
 class Person(Agent):
     """
@@ -134,20 +138,20 @@ class Person(Agent):
             The keys are OpinionTopicIDs, and the values are Opinion objects.
             These are deep copied when the Person is initialised, so that the Person has their own opinions.
     """
-    def __init__(self, agent_id: AgentID, environment: "Environment",
+    def __init__(self, id: PersonID, environment: "Environment",
         year_of_birth: int = None, gender_id: GenderID = None,
         opinions: dict[OpinionTopicID, 'Opinion'] = None):
         """
         Initialize
 
         Args:
-            agent_id: Unique identifier for the Agent instance.
-            environment: The Environment the Agent instance belongs to.
-            year_of_birth: The year the animal was born.
+            id: Unique identifier for the Person instance.
+            environment: The Environment the Person instance belongs to.
+            year_of_birth: The year the person was born.
             gender_id: The GenderID attributed.
             opinions: A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
         """
-        super().__init__(agent_id, environment)
+        super().__init__(id, environment)
         self.gender_id = gender_id
         # Robust gender_map checking for mocks and real objects
         gender_map = getattr(environment, 'gender_map', None)
