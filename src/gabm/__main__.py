@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 # Local imports
 from gabm.abm.environment import Environment, Nation
 from gabm.abm.agent import Agent, Person
-from gabm.abm.group import Group, OpinionatedGroup
+from gabm.abm.group import Group, OpinionGroup
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, OpinionTopic, Opinion
 
 

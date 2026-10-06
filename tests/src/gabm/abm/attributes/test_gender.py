@@ -10,14 +10,14 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 import pytest
 # Local imports
 from gabm.abm.attributes.gender import GenderID, Gender, GenderMap
-from gabm.abm.attributes.ethnicity import EthnicityID
+from gabm.abm.attributes.education import EducationID
 from gabm.core.id import GABMID
 
 def test_gender_id():
     gid0 = GenderID(0)
     gid1 = GenderID(1)
     gid00 = GenderID(0)
-    eid0 = EthnicityID(0)
+    eid0 = EducationID(0)
     gabmid0 = GABMID(0)
     assert str(gid0) == "GenderID(0)"
     assert str(gid1) == "GenderID(1)"

@@ -53,7 +53,11 @@
     "id": "swiss-ai/apertus-v1.5-70b-thinking",
     "object": "model",
     "created": 1677610602,
-    "owned_by": "swiss-ai"
+    "owned_by": "swiss-ai",
+    "pricing": {
+      "input": 0.82,
+      "output": 2.92
+    }
   },
   {
     "id": "swiss-ai/apertus-v1.5-8b",

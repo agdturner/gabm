@@ -3,6 +3,8 @@
 from __future__ import annotations
 """
 Agent module for GABM.
+
+For representing an entity within an Environment. The Agent class is a base class for more specific agent types, such as Person and Citizen.
 """
 # Metadata
 __author__ = ["Andy Turner <agdturner@gmail.com>"]
@@ -16,17 +18,20 @@ import copy
 import logging
 # Local imports
 from gabm.core.id import GABMID
-from gabm.abm.attributes.ethnicity import EthnicityID, Ethnicity, EthnicityMap
 from gabm.abm.attributes.gender import GenderID
+from gabm.abm.attributes.interest import InterestTopicID, Interest, InterestValue
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
 from gabm.abm.attributes.region import RegionID, RegionMap
 from gabm.abm.attributes.education import EducationID, Education, EducationMap
 from gabm.abm.attributes.employment import EmploymentID, EmploymentMap
+from gabm.abm.attributes.health import HealthID, HealthMap
 from gabm.abm.attributes.income import IncomeID, IncomeMap
+from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
+from gabm.abm.attributes.wealth import WealthID, Wealth
 # TYPE_CHECKING is used to avoid circular imports.
 if TYPE_CHECKING:
     from gabm.abm.environment import Environment, Nation
-    from gabm.abm.group import Group, OpinionatedGroup
+    from gabm.abm.group import Group, OpinionGroup
 
 class AgentID(GABMID):
     """
@@ -133,6 +138,10 @@ class Person(Agent):
             The year of birth attributed.
         gender_id (GenderID):
             The GenderID attributed.
+        interests (Dict[InterestTopicID, Interest]):
+            A dictionary of Interests.
+            The keys are InterestTopicIDs, and the values are Interest objects.
+            These are deep copied when the Person is initialised, so that the Person has their own
         opinions (Dict[OpinionTopicID, Opinion]):
             A dictionary of Opinions.
             The keys are OpinionTopicIDs, and the values are Opinion objects.
@@ -140,6 +149,7 @@ class Person(Agent):
     """
     def __init__(self, id: PersonID, environment: "Environment",
         year_of_birth: int = None, gender_id: GenderID = None,
+        interests: dict[InterestTopicID, 'Interest'] = None,
         opinions: dict[OpinionTopicID, 'Opinion'] = None):
         """
         Initialize
@@ -189,6 +199,10 @@ class Person(Agent):
         if self.get_age() > 200:
             logging.warning(f"Age ({self.get_age()}) is unusually high.")
         self.opinions = {}
+        # If interests are provided, deep copy them to the person so that they have their own interests.
+        if interests is not None:
+            for interest_topic_id, interest in interests.items():
+                self.interests[interest_topic_id] = copy.deepcopy(interest)
         # If opinions are provided, deep copy them to the person so that they have their own opinions.
         if opinions is not None:
             for opinion_topic_id, opinion in opinions.items():
@@ -200,7 +214,7 @@ class Person(Agent):
             String representation.
         """
         super_str = super().__str__()
-        return f"{super_str}, year_of_birth={self.year_of_birth}, gender={self.get_gender()}, opinions={self.opinions}"
+        return f"{super_str}, year_of_birth={self.year_of_birth}, gender={self.get_gender()}, interests={self.interests}, opinions={self.opinions}"
 
     def get_age(self) -> int:
         """
@@ -235,7 +249,16 @@ class Person(Agent):
         except Exception:
             pass
         return str(self.gender_id)
-        
+
+    def get_interest(self, interest_id: InterestTopicID) -> 'Interest':
+        """
+        Args:
+            interest_id: The ID of the interest to get.
+        Return:
+            The Interest object for the interest_id, or None if not found.
+        """
+        return self.interests.get(interest_id)
+
     def get_opinion(self, opinion_id: OpinionTopicID) -> 'Opinion':
         """
         Args:
@@ -244,6 +267,17 @@ class Person(Agent):
             The Opinion object for the opinion_id, or None if not found.
         """
         return self.opinions.get(opinion_id)
+    
+    def add_interest(self, interest: 'Interest', value: InterestValue):
+        """
+        Add interest to interests.
+
+        Args:
+            interest: The Interest to add.
+            value: The InterestValue to add for the interest.
+        """
+        self.interests[interest.interest_id] = interest
+        self.interests[interest.interest_id].value = value
 
     def add_opinion(self, opinion: 'Opinion', value: OpinionValue):
         """
@@ -255,6 +289,23 @@ class Person(Agent):
         """
         self.opinions[opinion.opinion_id] = opinion
         self.opinions[opinion.opinion_id].value = value
+
+    def set_interest(self, interest_id: InterestTopicID, value: InterestValue):
+        """
+        Set an interest value.
+
+        Args:
+            interest_id: The ID of the interest to set.
+            value: The value to set the interest to.
+        """
+        if interest_id not in self.interests:
+            message = (f"Attempting to set interest value for non-existent interest ID {interest_id}. "
+                       f"Valid interest IDs are: {list(self.interests.keys())}. "
+                       f"Adding new interest with value {value}.")
+            logging.warning(message)
+            raise ValueError(message)
+        else:
+            self.interests[interest_id].value = value
 
     def set_opinion(self, opinion_id: OpinionTopicID, value: OpinionValue):
         """
@@ -272,6 +323,22 @@ class Person(Agent):
             raise ValueError(message)
         else:
             self.opinions[opinion_id].value = value
+
+    def get_interest_profile(self) -> str:
+        """
+        An interest profile is a summary of interests reflecting the similarity and difference 
+        in interests of the individual relative to their groups and others in the enviornment.
+        
+        Return:
+            A string summarizing the interest profile.
+        """
+        if len(self.interests) == 0:
+            return "I have no interests."
+        # Return a simple summary what the interests are.
+        summary = "I have interests in the following topics:\n"
+        for topic, value in self.interests.items():
+            summary += f"  {topic}\n"
+        return summary
 
     def get_opinion_profile(self) -> str:
         """
@@ -310,9 +377,15 @@ class Person(Agent):
             i: The index of the agent to communicate with.
         Note:
             This method should only be used when both self and the other agent are instances of Person
-            (i.e., have an 'opinions' attribute). If not, the method will log a warning and do nothing.
+            (i.e., have 'interests' and 'opinions' attributes). If not, the method will log a warning and do nothing.
         """
         other_agent = self.environment.agents_active[i]
+        if not isinstance(other_agent, Person):
+            logging.warning(f"communicate called with non-Person agent: {type(other_agent)}. Skipping communication.")
+            return
+        if not (hasattr(self, 'interests') and hasattr(other_agent, 'interests')):
+            logging.warning(f"communicate called with non-Person agent(s): self={type(self)}, other_agent={type(other_agent)}. Skipping communication.")
+            return
         if not (hasattr(self, 'opinions') and hasattr(other_agent, 'opinions')):
             logging.warning(f"communicate called with non-Person agent(s): self={type(self)}, other_agent={type(other_agent)}. Skipping communication.")
             return

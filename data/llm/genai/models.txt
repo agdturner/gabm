@@ -88,6 +88,10 @@ Model ID: models/gemini-3.1-flash-lite-image
   Description: 
   Owned by: google
 
+Model ID: models/gemini-nano-banana-2.1
+  Description: 
+  Owned by: google
+
 Model ID: models/gemini-3.5-flash
   Description: 
   Owned by: google
@@ -136,6 +140,14 @@ Model ID: models/gemini-3.1-flash-tts-preview
   Description: 
   Owned by: google
 
+Model ID: models/gemini-3.8-flash-tts
+  Description: 
+  Owned by: google
+
+Model ID: models/gemini-3.8-flash-lite-tts
+  Description: 
+  Owned by: google
+
 Model ID: models/gemini-robotics-er-2-preview
   Description: 
   Owned by: google
@@ -149,6 +161,10 @@ Model ID: models/antigravity-preview-05-2026
   Owned by: google
 
 Model ID: models/antigravity-preview-09-2026
+  Description: 
+  Owned by: google
+
+Model ID: models/antigravity-preview-latest
   Description: 
   Owned by: google
 
@@ -209,6 +225,14 @@ Model ID: models/gemini-2.5-flash-native-audio-preview-12-2025
   Owned by: google
 
 Model ID: models/gemini-3.1-flash-live-preview
+  Description: 
+  Owned by: google
+
+Model ID: models/gemini-3.8-live
+  Description: 
+  Owned by: google
+
+Model ID: models/gemini-3.8-live-extended-thinking
   Description: 
   Owned by: google
 

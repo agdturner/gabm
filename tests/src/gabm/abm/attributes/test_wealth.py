@@ -10,21 +10,21 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 import pytest
 # Local imports
 from gabm.abm.attributes.wealth import WealthID, Wealth
-from gabm.abm.attributes.ethnicity import EthnicityID
+from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_wealth_id():
     wid0 = WealthID(0)
     wid1 = WealthID(1)
     wid00 = WealthID(0)
-    eid0 = EthnicityID(0)
-    gid0 = GABMID(0)
+    gid0 = GenderID(0)
+    gabmid0 = GABMID(0)
     assert str(wid0) == "WealthID(0)"
     assert str(wid1) == "WealthID(1)"
     assert wid0 == wid00
     assert wid0 != wid1
-    assert wid0 != eid0
     assert wid0 != gid0
+    assert wid0 != gabmid0
 
 def test_wealth():
     wid = WealthID(0)

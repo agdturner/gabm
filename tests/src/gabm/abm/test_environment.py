@@ -14,6 +14,8 @@ from gabm.abm.environment import Environment, Nation
 from gabm.abm.agent import AgentID, Agent
 from gabm.abm.group import GroupID, Group
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
+from gabm.abm.attributes.interest import InterestTopicID, InterestValue, InterestValueMap, Interest
+from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
 
 def test_environment_add_agent_and_group():
     env = Environment(year=2026)

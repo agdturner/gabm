@@ -132,6 +132,12 @@
     "description": ""
   },
   {
+    "id": "models/gemini-nano-banana-2.1",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
     "id": "models/gemini-3.5-flash",
     "object": "model",
     "owned_by": "google",
@@ -204,6 +210,18 @@
     "description": ""
   },
   {
+    "id": "models/gemini-3.8-flash-tts",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
+    "id": "models/gemini-3.8-flash-lite-tts",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
     "id": "models/gemini-robotics-er-2-preview",
     "object": "model",
     "owned_by": "google",
@@ -223,6 +241,12 @@
   },
   {
     "id": "models/antigravity-preview-09-2026",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
+    "id": "models/antigravity-preview-latest",
     "object": "model",
     "owned_by": "google",
     "description": ""
@@ -313,6 +337,18 @@
   },
   {
     "id": "models/gemini-3.1-flash-live-preview",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
+    "id": "models/gemini-3.8-live",
+    "object": "model",
+    "owned_by": "google",
+    "description": ""
+  },
+  {
+    "id": "models/gemini-3.8-live-extended-thinking",
     "object": "model",
     "owned_by": "google",
     "description": ""

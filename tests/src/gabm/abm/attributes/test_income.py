@@ -10,14 +10,14 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 import pytest
 # Local imports
 from gabm.abm.attributes.income import IncomeID, Income, IncomeMap
-from gabm.abm.attributes.ethnicity import EthnicityID
+from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_income_id():
     iid0 = IncomeID(0)
     iid1 = IncomeID(1)
     iid00 = IncomeID(0)
-    eid0 = EthnicityID(0)
+    eid0 = GenderID(0)
     gid0 = GABMID(0)
     assert str(iid0) == "IncomeID(0)"
     assert str(iid1) == "IncomeID(1)"

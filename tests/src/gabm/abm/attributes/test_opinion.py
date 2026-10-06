@@ -11,19 +11,19 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 import pytest
 # Local imports
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionTopic, OpinionValue, OpinionValueMap, Opinion
-from gabm.abm.attributes.ethnicity import EthnicityID
+from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_opinion_topic_id():
     otid0 = OpinionTopicID(0)
     otid1 = OpinionTopicID(1)
     otid00 = OpinionTopicID(0)
-    eid0 = EthnicityID(0)
+    gid0 = GenderID(0)
     gabmid0 = GABMID(0)
     assert str(otid0) == "OpinionTopicID(0)"
     assert otid0 == otid00
     assert otid0 != otid1
-    assert otid0 != eid0
+    assert otid0 != gid0
     assert otid0 != gabmid0
 
 def test_opinion_topic():
