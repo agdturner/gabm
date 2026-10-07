@@ -1,0 +1,6 @@
+Simple conversation transcript
+Person 1: age=51, gender=unknown, interests=3
+Person 2: age=34, gender=female, interests=3
+Shared interest topic IDs: 0, 1
+Person 1: I enjoy topics where we both have interest overlap.
+Person 2: Same here, maybe we should start with music and sports.

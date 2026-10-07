@@ -14,7 +14,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 
 # Standard library imports
-from datetime import datetime
+from datetime import datetime, timezone
 import functools
 import json
 import logging
@@ -222,7 +222,7 @@ def cache_and_log(
     # Write JSONL log
     jsonl_path.parent.mkdir(parents=True, exist_ok=True)
     log_entry = {
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "model": model,
         "prompt": prompt,
         "response": extract_text_from_response(response),

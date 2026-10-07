@@ -16,6 +16,9 @@ from gabm.core.id import GABMID
 
 # --- GroupID Tests ---
 def test_group_id():
+    """
+    Test the GroupID class.
+    """
     gid0 = GroupID(0)
     gid1 = GroupID(1)
     gid00 = GroupID(0)
@@ -29,6 +32,9 @@ def test_group_id():
 
 # --- Group Tests ---
 def test_group_creation_and_membership():
+    """
+    Test the creation of a Group and its membership management.
+    """
     gid = GroupID(1)
     group = Group(gid, name="TestGroup")
     assert group.id == gid
@@ -46,6 +52,9 @@ def test_group_creation_and_membership():
     assert group not in agent.groups
 
 def test_group_str_repr_and_list_members():
+    """
+    Test the string representation, repr, and list_members method of Group.
+    """
     group = Group(GroupID(2), name="Alpha")
     s = str(group)
     r = repr(group)
@@ -55,6 +64,9 @@ def test_group_str_repr_and_list_members():
 
 # --- OpinionGroup Tests ---
 def test_opinion_group_creation_and_opinions():
+    """
+    Test the creation of an OpinionGroup and its opinions.
+    """
     gid = GroupID(3)
     opinions = {"topic1": Mock(value=5), "topic2": Mock(value=10)}
     ogroup = OpinionGroup(gid, name="OpinionGroup", opinions=opinions)
@@ -64,6 +76,9 @@ def test_opinion_group_creation_and_opinions():
 
 # --- get_AverageOpinion Test ---
 def test_opinion_group_get_average_opinion():
+    """
+    Test the get_AverageOpinion method of OpinionGroup.
+    """
     gid = GroupID(4)
     ogroup = OpinionGroup(gid, name="OpinionGroup")
     # Mock members with get_opinion

@@ -1,5 +1,5 @@
 """
-Tests for the publicai module.
+Tests for the deepseek module.
 """
 # Metadata
 __author__ = ["Andy Turner <agdturner@gmail.com>"]
@@ -12,41 +12,49 @@ import pytest
 # Local imports
 from gabm.io.read_data import read_api_keys
 
-SERVICE_CLASS = "PublicAIService"
-DEFAULT_PROMPT = ("swiss-ai/apertus-70b-instruct", "Give me a brief explanation of gravity in simple terms.")
+pytestmark = pytest.mark.live_llm
+
+SERVICE_CLASS = "DeepSeekService"
+DEFAULT_PROMPT = ("deepseek-chat", "Hello DeepSeek!")
 
 
 def model_list_files_exist():
     from pathlib import Path
-    base_dir = Path("data/llm/publicai")
+    base_dir = Path("data/llm/deepseek")
     json_file = base_dir / "models.json"
     txt_file = base_dir / "models.txt"
     return json_file.exists() and txt_file.exists()
 
 
 def import_service():
-    module = "gabm.io.llm.publicai"
+    module = "gabm.io.llm.deepseek"
     from importlib import import_module
     mod = import_module(module)
     return getattr(mod, SERVICE_CLASS)
 
 
-def test_publicai_model_list():
+def test_deepseek_model_list():
+    """
+    Test that the DeepSeekService can list available models using a valid API key.
+    """
     api_keys = read_api_keys('data/api_key.csv')
-    api_key = api_keys.get("publicai")
+    api_key = api_keys.get("deepseek")
     if not api_key or api_key.startswith("YOUR_"):
-        pytest.skip("API key for publicai not set.")
+        pytest.skip("API key for deepseek not set.")
     Service = import_service()
     service = Service()
     models = service.list_available_models(api_key)
     assert models is not None
 
 
-def test_publicai_communication():
+def test_deepseek_communication():
+    """
+    Test that the DeepSeekService can communicate with the API using a valid API key and prompt.
+    """
     api_keys = read_api_keys('data/api_key.csv')
-    api_key = api_keys.get("publicai")
+    api_key = api_keys.get("deepseek")
     if not api_key or api_key.startswith("YOUR_"):
-        pytest.skip("API key for publicai not set.")
+        pytest.skip("API key for deepseek not set.")
     Service = import_service()
     service = Service()
     model, prompt = DEFAULT_PROMPT

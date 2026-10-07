@@ -6,6 +6,7 @@
 - [Contributing and Communicating](#contributing-and-communicating)
 - [Project Directories](#project-directories)
 - [Testing](#testing)
+- [Example Simulations and Reproducibility](#example-simulations-and-reproducibility)
 - [Python Package Entry Point](#python-package-entry-point)
 - [Makefile Targets](#makefile-targets)
 - [Developing Documentation](#developing-documentation)
@@ -84,7 +85,9 @@ The root project directory contains documentation and files needed for building 
 - `docs/`: Documentation
 - `scripts/`: Utility scripts
 - `src/`: Python source code
+- `src/gabm/examples/`: Runnable example simulation modules (source logic lives here)
 - `tests/`: Test suite for src
+- `tests/src/gabm/examples/`: Tests for example simulation modules
 - `venv-build-test/`: For temporary virtual environments created for testing.
 
 
@@ -108,9 +111,19 @@ By default, tests marked as `@pytest.mark.slow` are excluded (see `pytest.ini`).
   pytest -m slow
   ```
 
+By default, tests marked as `@pytest.mark.live_llm` are also excluded. These tests require external LLM service access and are not suitable for offline/HPC compute-node default test runs.
+
+Run live external LLM tests with:
+
+  ```bash
+  pytest -m live_llm
+  ```
+
 ### Adding Tests
 
 Please add or update tests when modifying or adding features. Aim for high test coverage to catch regressions and ensure code reliability.
+
+For sustainability and maintainability, functional source code modules are expected to have corresponding tests. In practice, each non-trivial module under `src/gabm/` should have at least one test module under `tests/src/gabm/`.
 
 Mark slow or resource-intensive tests with `@pytest.mark.slow` and set a timeout if needed (e.g., `@pytest.mark.timeout()`).
 
@@ -122,6 +135,8 @@ Do not place test fixtures in `data/`, as that directory is intended for runtime
 
 When tests need file-based inputs, prefer paths under `tests/data/` so tests are self-contained and do not depend on mutable runtime data.
 
+For simulation example tests, output artifacts should be written under the corresponding test example directory (for example, `tests/src/gabm/examples/chat/output/`) so output location is explicit and colocated with the tests.
+
 ### Local LLM Tests
 
 Tests for local LLMs (e.g., Apertus) are marked as slow and excluded by default as these tests require significant hardware resources (GPU recommended). On CPU-only machines, inference may be extremely slow or impractical.
@@ -131,13 +146,65 @@ To run local LLM tests, ensure your environment is suitable and use:
   pytest -m slow
   ```
 
+To run all optional LLM-related tests (local and live external) when your environment supports it, use:
+  ```bash
+  pytest -m "slow or live_llm"
+  ```
+
+## Example Simulations and Reproducibility
+
+Example simulation logic should live in `src/gabm/examples/...` and be importable. Tests should live in `tests/src/gabm/examples/...` and validate reproducibility.
+
+Recommended pattern:
+- Put executable simulation logic in `src/gabm/examples/<example_name>/sim.py`.
+- Keep tests in `tests/src/gabm/examples/<example_name>/test_sim.py`.
+- Expose a callable (for example `run(...)`) from the source simulation module so tests can execute it directly.
+
+Reproducibility requirements for simulation tests:
+- Prefer deterministic behavior by explicitly setting random seeds.
+- Avoid hidden randomness from global state; use local RNG objects where practical.
+- Validate output reproducibility by running the same simulation twice with the same seed and asserting identical outputs.
+- Where useful, also assert that changing the seed changes the output.
+
+LLM-specific reproducibility guidance:
+- External LLM responses may drift over time, so strict reproducibility should not depend on live external API calls.
+- Use prompt/response caches when tests should replay known interactions.
+- Local LLM reproducibility tests (for example on HPC) should be marked slow and optional.
+- In HPC environments where compute nodes have no external access, avoid requiring external LLM calls in default test runs.
+- Some code changes do not require clearing LLM caches; cache clearing should be periodic or intentional (for example, after LLM integration changes).
+- Periodically run a cache-cleared LLM verification pass (for example using `make clear-caches` followed by targeted LLM tests) to detect service/API drift.
+
+### Reproducibility Checklist
+
+When adding or updating a simulation example, check the following:
+- Simulation logic is in `src/gabm/examples/<example_name>/sim.py` and is importable.
+- Test logic is in `tests/src/gabm/examples/<example_name>/test_sim.py`.
+- A fixed seed is used for deterministic test runs.
+- Running the same simulation twice with the same seed gives identical outputs.
+- Changing the seed is tested and expected to change outputs (where randomness is intended).
+- Output paths for tests are explicit and under `tests/src/gabm/examples/.../output/` or `tmp_path`.
+- Tests do not require external network calls in the default `make test` path.
+- LLM-related tests are correctly marked as `slow` and/or `live_llm`.
+
 ### Test Workflow
 
 - PRs should pass the test workflow before being merged.
 - See `.github/workflows/test.yml` for Continuous Integration (CI) details.
 
+### CI and LLM Drift Checks
+
+The default CI workflow should continue to run `make test` only, excluding `slow` and `live_llm` tests for reliability and portability.
+
+Maintainers should run `make llm-drift-check` periodically and especially in these cases:
+- Before cutting a release.
+- After changes to LLM service implementations, prompts, model names, or request/response handling.
+- After dependency updates that can affect LLM client behavior.
+
+In environments without outbound network access (for example HPC compute nodes), skip drift checks and run them in a suitable connected environment instead.
+
 ### Useful pytest markers
 - `@pytest.mark.slow`: Marks tests as slow; skipped by default.
+- `@pytest.mark.live_llm`: Marks tests that require live external LLM APIs; skipped by default.
 - `@pytest.mark.timeout(seconds)`: Fails test if it exceeds the given duration.
 
 ### Note on DeprecationWarnings
@@ -182,6 +249,7 @@ For maintainability, all Makefile targets that depend on other build steps shoul
 | `make gh-pages-deploy` | Build and deploy documentation to GitHub Pages (runs scripts/gh-pages-deploy.py) |
 | `make clean`   | Remove build/test artifacts and Python caches                                     |
 | `make clear-caches` | Delete all LLM caches and model lists (for a clean slate)                    |
+| `make llm-drift-check` | Clear caches and run live LLM integration tests (for periodic drift checks) |
 | `make git-clean` | Clean up merged local branches and prune deleted remotes                        |
 | `make sync`    | Sync main branch with upstream                                                    |
 | `make sync-feature BRANCH=release/0.2.0` | Sync and rebase a feature/release branch onto main     |
@@ -398,7 +466,7 @@ If you encounter problems, please check relevant log files for details.
 Certain files and directories are intentionally excluded from the repository via `.gitignore` to keep the project clean and secure:
 
 - `data/logs/` — All log files generated by scripts and modules (can be large and environment-specific)
-- `data/io/llm/*/prompt_response_cache.pkl` — LLM response cache files
+- `data/llm/*/prompt_response_cache.pkl` — LLM response cache files
 - `data/api_key.csv` — API keys (never commit secrets)
 
 

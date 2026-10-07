@@ -14,12 +14,15 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 # Standard library imports
 from typing import TYPE_CHECKING, Set
+from dataclasses import dataclass, field
 import copy
 import logging
+import random
+from types import MappingProxyType
 # Local imports
 from gabm.core.id import GABMID
 from gabm.abm.attributes.gender import GenderID
-from gabm.abm.attributes.interest import InterestTopicID, Interest, InterestValue
+from gabm.abm.attributes.interest import InterestTopicID, Interest, InterestValue, InterestValueMap
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
 from gabm.abm.attributes.region import RegionID, RegionMap
 from gabm.abm.attributes.education import EducationID, Education, EducationMap
@@ -50,30 +53,30 @@ class AgentID(GABMID):
 
 class Agent():
     """
-    For representing an entity within an Environment. 
-    The type annotation for environment is quoted as it is imported 
+    For representing an entity within an Environment.
+    The type annotation for environment is quoted as it is imported
     under TYPE_CHECKING to avoid circular imports.
 
     Attributes:
-        id (AgentID):
+        agent_id (AgentID):
             Unique identifier for the Agent instance.
         environment (Environment):
             The Environment the Agent instance belongs to.
         groups (Set[Group]):
             A Set of Groups that the Agent instance belongs to.
     """
-    def __init__(self, id: int | AgentID, environment: "Environment"):
+    def __init__(self, agent_id: int | AgentID, environment: Environment):
         """
         Initialize.
         Args:
             agent_id: Unique identifier for the Agent instance.
             environment: The shared environment the Agent instance belongs to.
         """
-        if isinstance(id, int):
-            self.id = AgentID(id)
-        elif not isinstance(id, AgentID):
+        if isinstance(agent_id, int):
+            self.id = AgentID(agent_id)
+        elif not isinstance(agent_id, AgentID):
             raise TypeError("agent_id must be an int or an AgentID")
-        self.id = id
+        self.id = agent_id if isinstance(agent_id, AgentID) else AgentID(agent_id)
         self.environment = environment
         self.groups: Set['Group'] = set()
 
@@ -113,6 +116,85 @@ class Agent():
         """
         group.remove_member(self)
 
+
+@dataclass
+class TraitBeliefState:
+    """
+    Typed container for trait beliefs.
+
+    Attributes:
+        self_trait_opinions: Person's perceived values of own base traits.
+        other_trait_opinions: Nested structure keyed as
+            other_agent_id -> order -> trait_topic_id -> value.
+    """
+    self_trait_opinions: dict[TraitTopicID, float] = field(default_factory=dict)
+    other_trait_opinions: dict[AgentID, dict[int, dict[TraitTopicID, float]]] = field(default_factory=dict)
+
+    def set_self_opinion(self, trait_id: TraitTopicID, value: float):
+        self.self_trait_opinions[trait_id] = value
+
+    def get_self_opinion(self, trait_id: TraitTopicID) -> float:
+        return self.self_trait_opinions.get(trait_id)
+
+    @staticmethod
+    def _normalize_agent_id(other_agent_id: int | AgentID) -> AgentID:
+        if isinstance(other_agent_id, AgentID):
+            return other_agent_id
+        return AgentID(other_agent_id)
+
+    def set_other_opinion(self,
+        other_agent_id: int | AgentID,
+        trait_id: TraitTopicID,
+        value: float,
+        order: int = 1):
+        if order < 1:
+            raise ValueError("order must be >= 1")
+        normalized_id = self._normalize_agent_id(other_agent_id)
+        self.other_trait_opinions.setdefault(normalized_id, {})
+        self.other_trait_opinions[normalized_id].setdefault(order, {})
+        self.other_trait_opinions[normalized_id][order][trait_id] = value
+
+    def get_other_opinion(self,
+        other_agent_id: int | AgentID,
+        trait_id: TraitTopicID,
+        order: int = 1) -> float:
+        if order < 1:
+            raise ValueError("order must be >= 1")
+        normalized_id = self._normalize_agent_id(other_agent_id)
+        if normalized_id not in self.other_trait_opinions:
+            return None
+        return self.other_trait_opinions[normalized_id].get(order, {}).get(trait_id)
+
+    def to_dict(self) -> dict:
+        return {
+            "self_trait_opinions": {
+                trait_id.id: value for trait_id, value in self.self_trait_opinions.items()
+            },
+            "other_trait_opinions": {
+                other_id.id: {
+                    order: {trait_id.id: value for trait_id, value in trait_map.items()}
+                    for order, trait_map in order_map.items()
+                }
+                for other_id, order_map in self.other_trait_opinions.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "TraitBeliefState":
+        state = cls()
+        for trait_id, value in data.get("self_trait_opinions", {}).items():
+            state.self_trait_opinions[TraitTopicID(int(trait_id))] = value
+
+        for other_id, order_map in data.get("other_trait_opinions", {}).items():
+            normalized_other = AgentID(int(other_id))
+            state.other_trait_opinions[normalized_other] = {}
+            for order, trait_map in order_map.items():
+                normalized_order = int(order)
+                state.other_trait_opinions[normalized_other][normalized_order] = {}
+                for trait_id, value in trait_map.items():
+                    state.other_trait_opinions[normalized_other][normalized_order][TraitTopicID(int(trait_id))] = value
+        return state
+
 class PersonID(AgentID):
     """
     Person ID
@@ -147,21 +229,24 @@ class Person(Agent):
             The keys are OpinionTopicIDs, and the values are Opinion objects.
             These are deep copied when the Person is initialised, so that the Person has their own opinions.
     """
-    def __init__(self, id: PersonID, environment: "Environment",
-        year_of_birth: int = None, gender_id: GenderID = None,
+    def __init__(self, person_id: PersonID, environment: Environment,
+        year_of_birth: int, gender_id: GenderID,
+        traits: dict[TraitTopicID, 'Trait'] = None,
         interests: dict[InterestTopicID, 'Interest'] = None,
         opinions: dict[OpinionTopicID, 'Opinion'] = None):
         """
         Initialize
 
         Args:
-            id: Unique identifier for the Person instance.
+            person_id: Unique identifier for the Person instance.
             environment: The Environment the Person instance belongs to.
             year_of_birth: The year the person was born.
             gender_id: The GenderID attributed.
+            traits: A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.interests: A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
             opinions: A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
+            
         """
-        super().__init__(id, environment)
+        super().__init__(agent_id=person_id, environment=environment)
         self.gender_id = gender_id
         # Robust gender_map checking for mocks and real objects
         gender_map = getattr(environment, 'gender_map', None)
@@ -198,7 +283,16 @@ class Person(Agent):
                 self.year_of_birth = self.environment.year
         if self.get_age() > 200:
             logging.warning(f"Age ({self.get_age()}) is unusually high.")
+        self.interests = {}
         self.opinions = {}
+        # `base_traits` are mutable and can change during simulation (e.g., reflection).
+        self.base_traits = {}
+        # Backward-compatible alias used by existing code/tests.
+        self.traits = self.base_traits
+        self.trait_beliefs = TraitBeliefState()
+        # Backward-compatible aliases.
+        self.self_trait_opinions = self.trait_beliefs.self_trait_opinions
+        self.other_trait_opinions = self.trait_beliefs.other_trait_opinions
         # If interests are provided, deep copy them to the person so that they have their own interests.
         if interests is not None:
             for interest_topic_id, interest in interests.items():
@@ -207,6 +301,55 @@ class Person(Agent):
         if opinions is not None:
             for opinion_topic_id, opinion in opinions.items():
                 self.opinions[opinion_topic_id] = copy.deepcopy(opinion)
+        self._initialize_trait_state(traits)
+
+    @staticmethod
+    def _default_trait_description(value: int | float) -> str:
+        if value <= -2:
+            return "very low"
+        if value == -1:
+            return "low"
+        if value == 0:
+            return "neither high nor low"
+        if value == 1:
+            return "high"
+        return "very high"
+
+    def _build_trait(self, trait_topic_id: TraitTopicID, value: int | float, description: str = None) -> Trait:
+        trait_description = description if description is not None else self._default_trait_description(value)
+        trait_value = TraitValue(trait_topic_id, value, trait_description)
+        return Trait(trait_topic_id, TraitValueMap({trait_topic_id: trait_value}), value)
+
+    def _initialize_trait_state(self, traits: dict[TraitTopicID, 'Trait'] = None):
+        # Ensure each person has canonical values for the Big Five traits.
+        # Others can still provide additional custom traits.
+        big_five_topic_ids = [
+            TraitTopicID(0),  # Openness to experience
+            TraitTopicID(1),  # Conscientiousness
+            TraitTopicID(2),  # Extraversion
+            TraitTopicID(3),  # Agreeableness
+            TraitTopicID(4),  # Neuroticism
+        ]
+        provided_traits = traits or {}
+
+        initial_trait_values = {}
+        for topic_id in big_five_topic_ids:
+            provided_trait = provided_traits.get(topic_id)
+            initial_trait_values[topic_id] = 0 if provided_trait is None else provided_trait.value
+
+        # Add custom traits while keeping the Big Five guaranteed.
+        for topic_id, trait in provided_traits.items():
+            if topic_id not in initial_trait_values:
+                initial_trait_values[topic_id] = trait.value
+
+        # Canonical initial values are immutable.
+        self.initial_trait_values = MappingProxyType(initial_trait_values)
+
+        # Mutable base trait objects start as a copy of canonical initial values.
+        for topic_id, value in self.initial_trait_values.items():
+            provided_trait = provided_traits.get(topic_id)
+            provided_description = None if provided_trait is None else provided_trait.get_description()
+            self.base_traits[topic_id] = self._build_trait(topic_id, value, provided_description)
 
     def __str__(self):
         """
@@ -258,6 +401,231 @@ class Person(Agent):
             The Interest object for the interest_id, or None if not found.
         """
         return self.interests.get(interest_id)
+
+    def get_trait(self, trait_id: TraitTopicID) -> 'Trait':
+        """
+        Args:
+            trait_id: The ID of the trait to get.
+        Return:
+            The Trait object for the trait_id, or None if not found.
+        """
+        return self.base_traits.get(trait_id)
+
+    def get_initial_trait_value(self, trait_id: TraitTopicID) -> int:
+        """
+        Get the immutable canonical initial value for a trait.
+
+        Args:
+            trait_id: The trait topic ID.
+
+        Return:
+            The immutable initial trait value, or None if not present.
+        """
+        return self.initial_trait_values.get(trait_id)
+
+    def set_base_trait_value(self, trait_id: TraitTopicID, value: int | float, description: str = None):
+        """
+        Update the mutable base trait value.
+
+        Args:
+            trait_id: The trait topic ID.
+            value: The new mutable value.
+            description: Optional description for the new value.
+        """
+        self.base_traits[trait_id] = self._build_trait(trait_id, value, description)
+
+    def set_self_trait_opinion(self, trait_id: TraitTopicID, value: int | float):
+        """
+        Set this person's self-perceived value for a trait.
+        """
+        self.trait_beliefs.set_self_opinion(trait_id, value)
+
+    def get_self_trait_opinion(self, trait_id: TraitTopicID) -> int | float:
+        """
+        Get this person's self-perceived value for a trait.
+        """
+        return self.trait_beliefs.get_self_opinion(trait_id)
+
+    def set_other_trait_opinion(self,
+        other_agent_id: int | AgentID,
+        trait_id: TraitTopicID,
+        value: int | float,
+        order: int = 1):
+        """
+        Set this person's opinion about another person's trait value.
+
+        Args:
+            other_agent_id: Other agent's ID.
+            trait_id: Trait topic ID.
+            value: Opinion value.
+            order: 1 for opinion of other's base trait, 2+ for higher-order
+                opinions (e.g., other's opinion of traits).
+        """
+        self.trait_beliefs.set_other_opinion(other_agent_id, trait_id, value, order)
+
+    def get_other_trait_opinion(self,
+        other_agent_id: int | AgentID,
+        trait_id: TraitTopicID,
+        order: int = 1) -> int | float:
+        """
+        Get this person's opinion about another person's trait value.
+
+        Args:
+            other_agent_id: Other agent's ID.
+            trait_id: Trait topic ID.
+            order: Recursion order of opinion.
+
+        Return:
+            Stored opinion value, or None if not found.
+        """
+        return self.trait_beliefs.get_other_opinion(other_agent_id, trait_id, order)
+
+    def export_trait_state(self) -> dict:
+        """
+        Export trait state for reproducible checkpoints.
+
+        Returns:
+            A serializable dictionary containing immutable initial values,
+            mutable base trait values, and trait beliefs.
+        """
+        return {
+            "initial_trait_values": {
+                trait_id.id: value for trait_id, value in self.initial_trait_values.items()
+            },
+            "base_traits": {
+                trait_id.id: trait.value for trait_id, trait in self.base_traits.items()
+            },
+            "trait_beliefs": self.trait_beliefs.to_dict(),
+        }
+
+    def import_trait_state(self, state: dict):
+        """
+        Import trait state from a dictionary produced by export_trait_state().
+        """
+        initial_values = {
+            TraitTopicID(int(trait_id)): value
+            for trait_id, value in state.get("initial_trait_values", {}).items()
+        }
+        if initial_values:
+            self.initial_trait_values = MappingProxyType(initial_values)
+
+        imported_base_traits = {}
+        for trait_id, value in state.get("base_traits", {}).items():
+            topic_id = TraitTopicID(int(trait_id))
+            imported_base_traits[topic_id] = self._build_trait(topic_id, value)
+        if imported_base_traits:
+            self.base_traits = imported_base_traits
+            self.traits = self.base_traits
+
+        self.trait_beliefs = TraitBeliefState.from_dict(state.get("trait_beliefs", {}))
+        self.self_trait_opinions = self.trait_beliefs.self_trait_opinions
+        self.other_trait_opinions = self.trait_beliefs.other_trait_opinions
+
+    def reflect_on_traits(self,
+        learning_rate: float = 0.25,
+        clamp_min: float = -2,
+        clamp_max: float = 2,
+        seed: int = None):
+        """
+        Update mutable base traits by reflecting towards self-perceived trait opinions.
+
+        Args:
+            learning_rate: Fractional adjustment towards self-opinion.
+            clamp_min: Minimum value after update.
+            clamp_max: Maximum value after update.
+            seed: Optional deterministic seed for tie/noise resolution.
+        """
+        if learning_rate < 0:
+            raise ValueError("learning_rate must be >= 0")
+
+        rng = random if seed is None else random.Random(seed)
+        for trait_id, trait in self.base_traits.items():
+            perceived = self.get_self_trait_opinion(trait_id)
+            if perceived is None:
+                continue
+            delta = (perceived - trait.value) * learning_rate
+            jitter = rng.uniform(-1e-9, 1e-9)
+            updated = trait.value + delta + jitter
+            updated = max(clamp_min, min(clamp_max, updated))
+            self.set_base_trait_value(trait_id, updated)
+
+    def generate_interests_from_traits(self,
+        seed: int = None,
+        total_interest_topics: int = 9,
+        overwrite: bool = False) -> dict[InterestTopicID, 'Interest']:
+        """
+        Generate interests influenced by traits.
+
+        The openness-to-experience trait (TraitTopicID(0)) influences how many
+        interests are generated: higher openness leads to more interests.
+
+        Args:
+            seed: Optional seed for deterministic generation. If None, the global
+                random module state is used.
+            total_interest_topics: Number of available interest topics to sample from.
+            overwrite: If True, replace existing interests. If False and interests
+                already exist, leave them unchanged.
+
+        Return:
+            The person's interest dictionary.
+        """
+        if len(self.interests) > 0 and not overwrite:
+            return self.interests
+
+        if total_interest_topics <= 0:
+            self.interests = {}
+            return self.interests
+
+        openness_topic_id = TraitTopicID(0)
+        openness_trait = self.base_traits.get(openness_topic_id)
+        openness_value = 0 if openness_trait is None else openness_trait.value
+
+        # Map openness to number of interests so higher openness yields more topics.
+        if openness_value >= 2:
+            target_count = 7
+        elif openness_value == 1:
+            target_count = 6
+        elif openness_value == 0:
+            target_count = 4
+        elif openness_value == -1:
+            target_count = 3
+        else:
+            target_count = 2
+
+        target_count = max(1, min(target_count, total_interest_topics))
+        rng = random if seed is None else random.Random(seed)
+        topic_ids = rng.sample(range(total_interest_topics), k=target_count)
+
+        if openness_value >= 1:
+            interest_value_choices = [1, 2]
+        elif openness_value <= -1:
+            interest_value_choices = [0, 1]
+        else:
+            interest_value_choices = [0, 1, 2]
+
+        descriptions = {
+            0: "occasionally interested",
+            1: "interested",
+            2: "very interested",
+        }
+
+        generated_interests = {}
+        for topic_id in topic_ids:
+            interest_topic_id = InterestTopicID(topic_id)
+            interest_value = rng.choice(interest_value_choices)
+            interest_value_obj = InterestValue(
+                interest_topic_id,
+                interest_value,
+                descriptions[interest_value],
+            )
+            generated_interests[interest_topic_id] = Interest(
+                interest_topic_id,
+                InterestValueMap({interest_topic_id: interest_value_obj}),
+                interest_value,
+            )
+
+        self.interests = generated_interests
+        return self.interests
 
     def get_opinion(self, opinion_id: OpinionTopicID) -> 'Opinion':
         """
@@ -465,10 +833,12 @@ class Citizen(Person):
         income_id (IncomeID):
             The agent's income level, represented as an IncomeID.
     """
-    def __init__(self, citizen_id: CitizenID, environment: "Nation",
+    def __init__(self, citizen_id: CitizenID, nation: Nation,
         year_of_birth: int = None,
         gender_id: GenderID = None,
+        traits: dict = None,
         opinions: dict = None,
+        interests: dict = None,
         region_id: int = None,
         education_id: int = None,
         ethnicity_id: int = None,
@@ -486,6 +856,10 @@ class Citizen(Person):
                 Year of birth.
             gender_id (GenderID):
                 The ID of the gender attributed.
+            traits (dict):
+                A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.
+            interests (dict):
+                A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
             opinions (dict):
                 A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
             region_id (RegionID):
@@ -499,8 +873,9 @@ class Citizen(Person):
             income_id (IncomeID):
                 The agent's income level, represented as an IncomeID.
         """
-        super().__init__(citizen_id, environment, year_of_birth=year_of_birth,
-            gender_id=gender_id, opinions=opinions)
+        super().__init__(person_id=citizen_id, environment=nation,
+            year_of_birth=year_of_birth, gender_id=gender_id, 
+            traits=traits, interests=interests, opinions=opinions)
         self.region_id=region_id
         self.education_id=education_id
         self.ethnicity_id=ethnicity_id

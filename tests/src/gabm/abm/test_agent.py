@@ -17,12 +17,18 @@ from gabm.abm.attributes.gender import GenderID, GenderMap
 
 # --- AgentID Tests ---
 def test_agent_id_str_and_repr():
+    """
+    Test the string representation and repr of AgentID.
+    """
     aid = AgentID(42)
     assert str(aid) == "AgentID(42)"
     assert repr(aid) == "AgentID(42)"
 
 # --- Agent Tests ---
 def test_agent_creation_and_group_membership():
+    """
+    Test the creation of an Agent and its group membership methods.
+    """
     env = Mock()
     agent = Agent(AgentID(1), env)
     assert agent.id.id == 1
@@ -36,6 +42,9 @@ def test_agent_creation_and_group_membership():
     group.remove_member.assert_called_with(agent)
 
 def test_agent_str_repr():
+    """
+    Test the string representation and repr of Agent.
+    """
     env = Mock()
     agent = Agent(AgentID(2), env)
     s = str(agent)
@@ -45,12 +54,15 @@ def test_agent_str_repr():
 
 # --- Person Tests ---
 def test_person_age_and_gender():
-    environment = Environment(2026, place="Earth", gender_map=GenderMap())    
+    """
+    Test the age and gender methods of Person.
+    """
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())    
     person = Person(PersonID(3), environment=environment, year_of_birth=2000, gender_id=GenderID.FEMALE)
     assert person.get_age() == 26
     assert person.get_gender() == "female"
     # Test default year_of_birth
-    person2 = Person(PersonID(4), environment=environment, gender_id=GenderID.MALE)
+    person2 = Person(PersonID(4), environment=environment, year_of_birth=None, gender_id=GenderID.MALE)
     assert person2.get_age() == 18
     assert person2.get_gender() == "male"
     # Minimal mock Opinion and OpinionTopicID
@@ -60,7 +72,7 @@ def test_person_age_and_gender():
             self.opinion_id = "topic1"
             self.opinion_values = None
     opinions = {"topic1": DummyOpinion(5)}
-    person = Person(PersonID(5), environment=environment, opinions=opinions)
+    person = Person(PersonID(5), environment=environment, year_of_birth=None, gender_id=None, opinions=opinions)
     # Deep copy check
     assert person.opinions["topic1"] is not opinions["topic1"]
     # get_opinion
@@ -73,7 +85,7 @@ def test_person_age_and_gender():
     with pytest.raises(ValueError):
         person.set_opinion("notopic", 1)
     # get_opinion_profile (no opinions)
-    person2 = Person(PersonID(6), environment=environment)
+    person2 = Person(PersonID(6), environment=environment, year_of_birth=None, gender_id=None)
     assert person2.get_opinion_profile() == "I have no opinions."
     # get_self_description
     desc = person.get_self_description()
@@ -81,14 +93,20 @@ def test_person_age_and_gender():
 
 # --- Citizen Tests ---
 def test_citizen_creation():
-    environment = Nation(2026, place="Earth", gender_map=GenderMap())
-    c = Citizen(CitizenID(7), environment=environment)
+    """
+    Test the creation of a Citizen object and its inheritance from Person.
+    """
+    environment = Nation(2026, name="Earth", gender_map=GenderMap())
+    c = Citizen(CitizenID(7), nation=environment)
     assert isinstance(c, Person)
 
 # --- Communication Tests (basic) ---
 def test_person_communicate_with_llm():
-    environment = Environment(2026, place="Earth", gender_map=GenderMap())
-    p = Person(PersonID(9), environment=environment)
+    """
+    Test the communicate_with_llm method of Person.
+    """
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    p = Person(PersonID(9), environment=environment, year_of_birth=None, gender_id=None)
     resp = p.communicate_with_llm("Hello", model="test-model")
     assert resp["response"].startswith("Echo:")
     assert resp["model"] == "test-model"

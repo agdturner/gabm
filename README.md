@@ -27,7 +27,13 @@
 
 
 ## Overview
-[GABM](https://github.com/compolis/GABM/) is a flexible, extensible [Python](https://www.python.org/) framework for developing agent-based models that use large language models (LLMs) as agent reasoning engines. It supports use of multiple LLM providers and implements persistent response caching.
+[GABM](https://github.com/compolis/GABM/) is a flexible, extensible [Python](https://www.python.org/) framework for developing agent-based models that use Large Language Model (LLM) services and programs for reasoning. It implements persistent response caching and is designed to reproduce results where possible.
+
+Recent agent-state additions include layered trait modeling support:
+- Immutable canonical initial trait values per agent (including the Big Five defaults).
+- Mutable base traits that can evolve during simulation.
+- Structured trait belief state for self and higher-order beliefs about other agents.
+- Trait-state export/import helpers for reproducible checkpoints and replay.
 
 
 ## License
@@ -46,6 +52,10 @@ Please use the [User Guide](USER_GUIDE.md).
 
 ## Developer Guide
 Please use the [Developer Guide](DEV_GUIDE.md).
+
+Quick command reminders for contributors:
+- `make test` for the default offline-safe test run.
+- `make llm-drift-check` for periodic cache-cleared live LLM drift checks (run in a network-connected environment).
 
 
 ## Roadmap

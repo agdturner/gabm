@@ -15,6 +15,9 @@ from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_trait_topic_id():
+    """
+    Test the TraitTopicID class.
+    """
     itid0 = TraitTopicID(0)
     itid1 = TraitTopicID(1)
     itid00 = TraitTopicID(0)
@@ -27,39 +30,51 @@ def test_trait_topic_id():
     assert itid0 != gabmid0
 
 def test_trait_topic():
+    """
+    Test the TraitTopic class.
+    """
     tid = TraitTopicID(0)
-    topic = TraitTopic(tid, "high", "A high trait.")
-    assert topic.id == tid
-    assert topic.topic == "high"
-    assert topic.description == "A high trait."
-    assert "TraitTopic" in str(topic)
-    assert "TraitTopic" in repr(topic)
+    tt = TraitTopic(tid, "neuroticism", "A neuroticism trait.")
+    assert tt.id == tid
+    assert tt.trait_topic == "neuroticism"
+    assert tt.description == "A neuroticism trait."
+    assert "TraitTopic" in str(tt)
+    assert "TraitTopic" in repr(tt)
 
 def test_trait_value():
+    """
+    Test the TraitValue class.
+    """
     tid = TraitTopicID(0)
-    val = TraitValue(tid, 2, "Very high")
-    assert val.trait_topic_id == tid
-    assert val.value == 2
-    assert val.description == "Very high"
-    assert "TraitValue" in str(val)
-    assert "TraitValue" in repr(val)
+    tv = TraitValue(tid, 2, "very high")
+    assert tv.trait_topic_id == tid
+    assert tv.value == 2
+    assert tv.description == "very high"
+    assert "TraitValue" in str(tv)
+    assert "TraitValue" in repr(tv)
 
 def test_trait_value_map():
+    """
+    Test the TraitValueMap class.
+    """
     tid = TraitTopicID(0)
-    val = TraitValue(tid, 2, "Very high")
-    values = TraitValueMap({tid: val})
-    assert values.values[tid] == val
+    tv = TraitValue(tid, 2, "very high")
+    values = TraitValueMap({tid: tv})
+    assert values.values[tid] == tv
     assert "TraitValueMap" in str(values)
 
 def test_trait():
+    """
+    Test the Trait class.
+    """
     tid = TraitTopicID(0)
-    val = TraitValue(tid, 2, "Very high")
-    values = TraitValueMap({tid: val})
-    trait = Trait(tid, values, 2)
+    tv = TraitValue(tid, 2, "very high")
+    tvm = TraitValueMap({tid: tv})
+    trait = Trait(tid, tvm, 2)
     assert trait.id == tid
-    assert trait.trait_values == values
+    assert trait.trait_values == tvm
     assert trait.value == 2
     assert "Trait" in str(trait)
-    assert trait.get_description() == "Very high"
-    trait2 = Trait(tid, values, 99)
+    assert trait.get_description() == "very high"
+    trait2 = Trait(tid, tvm, -999)  # Value not represented for this trait topic
     assert trait2.get_description() is None

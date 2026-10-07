@@ -15,6 +15,9 @@ from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_interest_topic_id():
+    """
+    Test the InterestTopicID class.
+    """
     itid0 = InterestTopicID(0)
     itid1 = InterestTopicID(1)
     itid00 = InterestTopicID(0)
@@ -27,6 +30,9 @@ def test_interest_topic_id():
     assert itid0 != gabmid0
 
 def test_interest_topic():
+    """
+    Test the InterestTopic class.
+    """
     tid = InterestTopicID(0)
     topic = InterestTopic(tid, "high", "A high interest.")
     assert topic.id == tid
@@ -36,6 +42,9 @@ def test_interest_topic():
     assert "InterestTopic" in repr(topic)
 
 def test_interest_value():
+    """
+    Test the InterestValue class.
+    """
     tid = InterestTopicID(0)
     val = InterestValue(tid, 2, "Very high")
     assert val.interest_topic_id == tid
@@ -45,6 +54,9 @@ def test_interest_value():
     assert "InterestValue" in repr(val)
 
 def test_interest_value_map():
+    """
+    Test the InterestValueMap class.
+    """
     tid = InterestTopicID(0)
     val = InterestValue(tid, 2, "Very high")
     values = InterestValueMap({tid: val})
@@ -52,6 +64,9 @@ def test_interest_value_map():
     assert "InterestValueMap" in str(values)
 
 def test_interest():
+    """
+    Test the Interest class.
+    """
     tid = InterestTopicID(0)
     val = InterestValue(tid, 2, "Very high")
     values = InterestValueMap({tid: val})

@@ -4,6 +4,7 @@
 ## Table of Contents
 - [Getting Started](#getting-started)
 - [Run the Main Program](#run-the-main-program)
+- [Trait State Modeling](#trait-state-modeling)
 - [Managing Logs and Caches](#managing-logs-and-caches)
 - [Using LLM Modules](#using-llm-modules)
 - [Troubleshooting](#troubleshooting)
@@ -157,6 +158,40 @@ When you run GABM (e.g., with `python3 -m gabm`), the default behavior is to exe
 - The random seed is set for reproducibility, so results are consistent across runs unless you change the seed.
 
 This ABM demonstration is a starting point, it does not show how LLMs can be used in an ABM yet!
+
+
+## Trait State Modeling
+
+`Person` now supports layered trait state designed for richer cognitive/social simulations:
+
+- `initial_trait_values`: immutable canonical starting values (includes the Big Five by default).
+- `base_traits`: mutable trait values that can evolve during simulation.
+- `trait_beliefs`: structured beliefs for:
+    - self-trait opinions;
+    - first-order opinions about others' traits;
+    - higher-order opinions (e.g., another person's opinion of traits).
+
+### Reflection updates
+
+Use `reflect_on_traits()` to move mutable base traits toward self-perceived trait values:
+
+```python
+person.set_self_trait_opinion(TraitTopicID(0), 2.0)
+person.reflect_on_traits(learning_rate=0.25, seed=123)
+```
+
+This keeps initial canonical values unchanged while allowing state evolution in simulation.
+
+### Reproducible trait snapshots
+
+For checkpointing and replay, use:
+
+```python
+state = person.export_trait_state()
+person.import_trait_state(state)
+```
+
+The exported state includes canonical initial values, mutable base traits, and structured trait beliefs.
 
 
 ## Managing Logs and Caches

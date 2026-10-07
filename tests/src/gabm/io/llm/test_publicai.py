@@ -1,5 +1,5 @@
 """
-Tests for the genai module.
+Tests for the publicai module.
 """
 # Metadata
 __author__ = ["Andy Turner <agdturner@gmail.com>"]
@@ -12,52 +12,51 @@ import pytest
 # Local imports
 from gabm.io.read_data import read_api_keys
 
-SERVICE_CLASS = "GenAIService"
-DEFAULT_PROMPT = ("models/gemini-2.5-pro", "Hello GenAI!")
+pytestmark = pytest.mark.live_llm
+
+SERVICE_CLASS = "PublicAIService"
+DEFAULT_PROMPT = ("swiss-ai/apertus-70b-instruct", "Give me a brief explanation of gravity in simple terms.")
 
 
 def model_list_files_exist():
     from pathlib import Path
-    base_dir = Path("data/llm/genai")
+    base_dir = Path("data/llm/publicai")
     json_file = base_dir / "models.json"
     txt_file = base_dir / "models.txt"
     return json_file.exists() and txt_file.exists()
 
 
 def import_service():
-    module = "gabm.io.llm.genai"
+    module = "gabm.io.llm.publicai"
     from importlib import import_module
     mod = import_module(module)
     return getattr(mod, SERVICE_CLASS)
 
 
-def test_genai_model_list():
+def test_publicai_model_list():
+    """
+    Test that the PublicAIService can list available models using a valid API key.
+    """
     api_keys = read_api_keys('data/api_key.csv')
-    api_key = api_keys.get("genai")
+    api_key = api_keys.get("publicai")
     if not api_key or api_key.startswith("YOUR_"):
-        pytest.skip("API key for genai not set.")
+        pytest.skip("API key for publicai not set.")
     Service = import_service()
     service = Service()
     models = service.list_available_models(api_key)
     assert models is not None
 
 
-def test_genai_communication():
+def test_publicai_communication():
+    """
+    Test that the PublicAIService can communicate with the API using a valid API key and prompt.
+    """
     api_keys = read_api_keys('data/api_key.csv')
-    api_key = api_keys.get("genai")
+    api_key = api_keys.get("publicai")
     if not api_key or api_key.startswith("YOUR_"):
-        pytest.skip("API key for genai not set.")
+        pytest.skip("API key for publicai not set.")
     Service = import_service()
     service = Service()
     model, prompt = DEFAULT_PROMPT
     resp = service.send(api_key, prompt, model=model)
-    # Handle error responses gracefully
-    if resp is None:
-        print("GenAIService.send() returned None. Check your API key, model name, and network connectivity.\n"
-              "If you see this message, check logs for more details.")
-        pytest.skip("GenAIService.send() returned None. Possibly quota exceeded or API unavailable.")
-    if isinstance(resp, dict) and resp.get("error") == "quota_exceeded":
-        pytest.skip("Quota exceeded for Gemini API, skipping test.")
-    if isinstance(resp, dict) and resp.get("error") == "api_error":
-        pytest.skip(f"API error: {resp.get('details')}")
     assert resp is not None and len(str(resp)) > 0

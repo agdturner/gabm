@@ -18,6 +18,9 @@ from gabm.abm.attributes.interest import InterestTopicID, InterestValue, Interes
 from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
 
 def test_environment_add_agent_and_group():
+    """
+    Test adding an agent and a group to the Environment.
+    """
     env = Environment(year=2026)
     agent = Agent(AgentID(1), env)
     group = Group(GroupID(1), name="TestGroup")
@@ -27,6 +30,9 @@ def test_environment_add_agent_and_group():
     assert env.groups_active[1] == group
 
 def test_environment_creation_and_opinions():
+    """
+    Test the creation of an Environment and its opinions.
+    """
     tid = OpinionTopicID(0)
     val = OpinionValue(tid, 1, "Agree")
     values = OpinionValueMap({tid: val})
@@ -34,7 +40,7 @@ def test_environment_creation_and_opinions():
     opinions = {tid: opinion}
     oenv = Environment(year=2024, opinions=opinions)
     assert oenv.year == 2024
-    assert oenv.place == "Earth"
+    assert oenv.name == "Earth"
     assert oenv.opinions[tid] == opinion
     s = str(oenv)
     r = repr(oenv)
@@ -42,12 +48,15 @@ def test_environment_creation_and_opinions():
     assert s == r
 
 def test_nation_creation_and_str():
+    """
+    Test the creation of a Nation and its string representation.
+    """
     tid = OpinionTopicID(1)
     val = OpinionValue(tid, 2, "Strongly Agree")
     values = OpinionValueMap({tid: val})
     opinion = Opinion(tid, values, 2)
     opinions = {tid: opinion}
-    nation = Nation(year=2023, place="UK", opinions=opinions)
+    nation = Nation(year=2023, name="UK", opinions=opinions)
     assert nation.opinions[tid] == opinion
     s = str(nation)
     r = repr(nation)

@@ -69,8 +69,6 @@ class TraitTopic():
         """
         self.id = trait_topic_id
         self.trait_topic = trait_topic
-        # Backward-compatible alias used by tests and older call sites.
-        self.topic = trait_topic
         self.description = description
 
     def __str__(self):

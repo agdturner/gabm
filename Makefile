@@ -7,6 +7,7 @@
 #   make gh-pages-deploy - Build and deploy documentation to GitHub Pages
 #   make clean           - Remove build/test artifacts
 #   make clear-caches    - Delete all LLM caches and model lists (for a clean slate)
+#   make llm-drift-check - Clear caches and run live LLM integration tests
 #   make git-clean       - Clean up merged local branches and prune deleted remotes
 #   make sync            - Sync main branch with upstream
 #   make sync-feature    - Sync and rebase a feature/release branch onto main (usage: make sync-feature BRANCH=release/0.2.0)
@@ -25,7 +26,7 @@
 # Caution: Some commands (like git-clean, release, and delete-release) can modify your git history or delete tags. Always review the scripts they call (in the scripts/ directory) to ensure they do what you expect before running these commands.
 
 # Phony targets (not actual files)
-.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed
+.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches llm-drift-check sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed
 
 # Show available Makefile commands
 help:
@@ -37,6 +38,7 @@ help:
 	@echo "  gh-pages-deploy2 - Build and deploy documentation to GitHub Pages on upstream remote (force push)"
 	@echo "  clean            - Remove build/test artifacts"
 	@echo "  clear-caches     - Delete all LLM caches and model lists (for a clean slate)"
+	@echo "  llm-drift-check  - Clear caches and run live LLM integration tests"
 	@echo "  git-clean        - Clean up merged local branches and prune deleted remotes"
 	@echo "  sync             - Sync main branch with upstream"
 	@echo "  sync-feature     - Sync and rebase a feature/release branch onto main (usage: make sync-feature BRANCH=release/0.2.0)"
@@ -108,6 +110,12 @@ clear-caches:
 	@echo "Clearing all LLM caches and model lists..."
 	python3 scripts/clear-caches.py
 	@echo "...done clearing all LLM caches and model lists."
+
+# Clear caches and run live external LLM tests to check for API/model drift
+llm-drift-check: clear-caches
+	@echo "Running live LLM drift check tests..."
+	PYTHONPATH=src:scripts pytest -m live_llm tests/src/gabm/io/llm -rs
+	@echo "...done running live LLM drift check tests."
 	
 # Clean up merged local branches and prune deleted remotes (safe)
 git-clean:

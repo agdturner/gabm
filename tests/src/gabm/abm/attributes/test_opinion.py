@@ -3,7 +3,7 @@ Tests for opinion module.
 """
 # Metadata
 __author__ = ["Andy Turner <agdturner@gmail.com>"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 
@@ -15,6 +15,9 @@ from gabm.abm.attributes.gender import GenderID
 from gabm.core.id import GABMID
 
 def test_opinion_topic_id():
+    """
+    Test the OpinionTopicID class.
+    """
     otid0 = OpinionTopicID(0)
     otid1 = OpinionTopicID(1)
     otid00 = OpinionTopicID(0)
@@ -27,6 +30,9 @@ def test_opinion_topic_id():
     assert otid0 != gabmid0
 
 def test_opinion_topic():
+    """
+    Test the OpinionTopic class.
+    """
     tid = OpinionTopicID(0)
     topic = OpinionTopic(tid, "positive", "A positive opinion.")
     assert topic.id == tid
@@ -36,6 +42,9 @@ def test_opinion_topic():
     assert "OpinionTopic" in repr(topic)
 
 def test_opinion_value():
+    """
+    Test the OpinionValue class.
+    """
     tid = OpinionTopicID(0)
     val = OpinionValue(tid, 2, "Strongly positive")
     assert val.opinion_topic_id == tid
@@ -45,6 +54,9 @@ def test_opinion_value():
     assert "OpinionValue" in repr(val)
 
 def test_opinion_value_map():
+    """
+    Test the OpinionValueMap class.
+    """
     tid = OpinionTopicID(0)
     val = OpinionValue(tid, 2, "Strongly positive")
     values = OpinionValueMap({tid: val})
@@ -52,6 +64,9 @@ def test_opinion_value_map():
     assert "OpinionValueMap" in str(values)
 
 def test_opinion():
+    """
+    Test the Opinion class.
+    """
     tid = OpinionTopicID(0)
     val = OpinionValue(tid, 2, "Strongly positive")
     values = OpinionValueMap({tid: val})
@@ -61,5 +76,5 @@ def test_opinion():
     assert opinion.value == 2
     assert "Opinion" in str(opinion)
     assert opinion.get_description() == "Strongly positive"
-    opinion2 = Opinion(tid, values, 99)
+    opinion2 = Opinion(tid, values, 99) # Value not represented for this opinion topic
     assert opinion2.get_description() is None

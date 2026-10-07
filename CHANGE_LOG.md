@@ -3,6 +3,7 @@
 
 ## Table of Contents
 - [Overview](#overview)
+- [Unreleased](#unreleased)
 - [0.2.6 - 2026-02-20](#026---2026-02-20)
 - [0.2.5 - 2026-02-19](#025---2026-02-19)
 - [0.2.2 - 2026-02-18](#022---2026-02-18)
@@ -13,6 +14,17 @@
 
 ## Overview
 A summary of changes are documented in this file.
+
+
+## [Unreleased]
+- Added layered trait state in `Person`:
+  - immutable canonical `initial_trait_values` (Big Five defaults);
+  - mutable `base_traits` for simulation evolution;
+  - typed `TraitBeliefState` for self, other, and higher-order trait beliefs.
+- Added `export_trait_state()` and `import_trait_state()` for reproducible trait-state checkpointing.
+- Added `reflect_on_traits()` to update mutable base traits toward self-trait opinions.
+- Extended tests for reproducible trait generation, trait immutability/mutability layers, trait belief hierarchy, reflection behavior, and state roundtrips.
+- Updated `README.md` and `USER_GUIDE.md` with trait-state modeling guidance.
 
 
 ## [0.2.6] - 2026-02-20
