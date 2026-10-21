@@ -41,6 +41,16 @@ def test_interest_topic():
     assert "InterestTopic" in str(topic)
     assert "InterestTopic" in repr(topic)
 
+
+def test_interest_topic_default_topics():
+    """Test default interest topic catalog."""
+    topics = InterestTopic.default_topics()
+
+    assert len(topics) == 9
+    assert [topic_id.id for topic_id in topics.keys()] == list(range(9))
+    assert topics[InterestTopicID(0)].topic == "science"
+    assert topics[InterestTopicID(8)].topic == "gaming"
+
 def test_interest_value():
     """
     Test the InterestValue class.
@@ -62,6 +72,29 @@ def test_interest_value_map():
     values = InterestValueMap({tid: val})
     assert values.values[tid] == val
     assert "InterestValueMap" in str(values)
+
+
+def test_interest_value_map_default_for_topic():
+    """Test default map factory for simulation-friendly setup."""
+    tid = InterestTopicID(3)
+    values = InterestValueMap.default_for_topic(tid)
+
+    assert tid in values.values
+    assert values.values[tid].interest_topic_id == tid
+    assert values.values[tid].value == 0
+    assert values.values[tid].description == "neutral"
+
+
+def test_interest_value_map_default_for_topics():
+    """Test default map factory for multiple topics."""
+    topic_ids = [InterestTopicID(1), InterestTopicID(4), InterestTopicID(7)]
+    values = InterestValueMap.default_for_topics(topic_ids, value=1, description="interested")
+
+    assert set(values.values.keys()) == set(topic_ids)
+    for topic_id in topic_ids:
+        assert values.values[topic_id].interest_topic_id == topic_id
+        assert values.values[topic_id].value == 1
+        assert values.values[topic_id].description == "interested"
 
 def test_interest():
     """

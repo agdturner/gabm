@@ -14,7 +14,7 @@ import pytest
 from gabm.abm.environment import Environment
 from gabm.abm.agent import PersonID, Person
 from gabm.abm.attributes.gender import GenderMap
-from gabm.abm.attributes.interest import InterestTopicID, Interest, InterestValue, InterestValueMap
+from gabm.abm.attributes.interest import InterestTopicID, InterestTopic, Interest, InterestValue, InterestValueMap
 from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
 
 
@@ -127,6 +127,154 @@ def test_generate_interests_from_traits_reproducible_with_seed_argument():
     signature_b = _interest_signature(person_b)
 
     assert signature_a == signature_b
+
+
+def test_generate_interests_from_traits_can_use_custom_interest_topics():
+    """Test generating interests from a caller-provided topic catalog."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    traits = {TraitTopicID(0): _make_trait(0, 1, "high")}
+    person = Person(person_id=PersonID(27), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
+
+    custom_topics = {
+        InterestTopicID(100): InterestTopic(InterestTopicID(100), "astrophotography", "Capturing night sky images"),
+        InterestTopicID(200): InterestTopic(InterestTopicID(200), "urban gardening", "Growing food in city spaces"),
+        InterestTopicID(300): InterestTopic(InterestTopicID(300), "podcast editing", "Editing and producing podcasts"),
+    }
+
+    person.generate_interests_from_traits(seed=2026, interest_topics=custom_topics)
+
+    assert len(person.interests) > 0
+    assert set(person.interests.keys()).issubset(set(custom_topics.keys()))
+
+
+def test_generate_default_interests_uses_default_topic_catalog():
+    """Test Person convenience wrapper for default trait-guided interest generation."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    traits = {TraitTopicID(0): _make_trait(0, 1, "high")}
+    person = Person(person_id=PersonID(28), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
+
+    person.generate_default_interests(seed=2026)
+
+    assert len(person.interests) > 0
+    assert all(0 <= topic_id.id <= 8 for topic_id in person.interests.keys())
+
+
+def test_with_random_traits_reproducible_with_seed():
+    """Test Person factory for random traits is deterministic when seeded."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    seed = 42
+    person_a = Person.with_random_traits(
+        person_id=PersonID(29),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=None,
+        seed=seed,
+    )
+    person_b = Person.with_random_traits(
+        person_id=PersonID(30),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=None,
+        seed=seed,
+    )
+
+    traits_a = sorted((topic_id.id, trait.value) for topic_id, trait in person_a.base_traits.items())
+    traits_b = sorted((topic_id.id, trait.value) for topic_id, trait in person_b.base_traits.items())
+
+    assert traits_a == traits_b
+
+
+def test_with_random_traits_can_generate_default_interests():
+    """Test Person factory can optionally generate trait-guided default interests."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    seed = 42
+    person = Person.with_random_traits(
+        person_id=PersonID(31),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=None,
+        seed=seed,
+        generate_interests=True,
+        interest_seed=seed + 1,
+    )
+
+    assert len(person.interests) > 0
+    assert all(0 <= topic_id.id <= 8 for topic_id in person.interests.keys())
+
+
+def test_get_interests_summary_prioritizes_strongest_like_and_dislike():
+    """Test summary highlights strongest interests and disinterests."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(32), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(3): _make_interest(3, 2, "very interested"),
+        InterestTopicID(7): _make_interest(7, 2, "very interested"),
+        InterestTopicID(4): _make_interest(4, -2, "strongly dislike"),
+        InterestTopicID(0): _make_interest(0, -2, "strongly dislike"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am most interested in music and reading. I am most disinterested in science and sport."
+
+
+def test_get_interests_summary_falls_back_to_interested_and_disliked():
+    """Test summary fallback when no very interested/disinterested values exist."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(33), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(3): _make_interest(3, 1, "interested"),
+        InterestTopicID(7): _make_interest(7, 1, "interested"),
+        InterestTopicID(4): _make_interest(4, -1, "dislike"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am most interested in music and reading. I am most disinterested in sport."
+
+
+def test_get_interests_summary_all_neutral_message():
+    """Test summary for all-neutral interests."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(34), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(1): _make_interest(1, 0, "neutral"),
+        InterestTopicID(2): _make_interest(2, 0, "neutral"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I don't currently have any interests."
+
+
+def test_get_interests_summary_only_disinterests():
+    """Test summary when only disinterests are present."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(35), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(4): _make_interest(4, -2, "strongly dislike"),
+        InterestTopicID(0): _make_interest(0, -1, "dislike"),
+        InterestTopicID(1): _make_interest(1, 0, "neutral"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am most disinterested in sport."
+
+
+def test_get_interests_summary_only_interests():
+    """Test summary when only interests are present."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(36), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(3): _make_interest(3, 1, "interested"),
+        InterestTopicID(7): _make_interest(7, 1, "interested"),
+        InterestTopicID(2): _make_interest(2, 0, "neutral"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am most interested in music and reading."
 
 
 def test_person_has_immutable_initial_big_five_values():

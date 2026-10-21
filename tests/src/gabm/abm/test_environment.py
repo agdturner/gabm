@@ -11,7 +11,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 import pytest
 # Local imports
 from gabm.abm.environment import Environment, Nation
-from gabm.abm.agent import AgentID, Agent
+from gabm.abm.agent import AgentID, Agent, Person
 from gabm.abm.group import GroupID, Group
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
 from gabm.abm.attributes.interest import InterestTopicID, InterestValue, InterestValueMap, Interest
@@ -62,3 +62,35 @@ def test_nation_creation_and_str():
     r = repr(nation)
     assert "Nation" in s
     assert s == r
+
+
+def _person_signature(person: Person):
+    trait_sig = sorted((topic_id.id, trait.value) for topic_id, trait in person.base_traits.items())
+    interest_sig = sorted((topic_id.id, interest.value) for topic_id, interest in person.interests.items())
+    return (person.id.id, person.year_of_birth, person.get_gender(), trait_sig, interest_sig)
+
+
+def test_environment_create_random_people_reproducible():
+    """Test bulk random person creation is deterministic when seeded."""
+    env_a = Environment(year=2026)
+    env_b = Environment(year=2026)
+
+    people_a = env_a.create_random_people(count=4, seed=2026, with_interests=True)
+    people_b = env_b.create_random_people(count=4, seed=2026, with_interests=True)
+
+    sig_a = [_person_signature(person) for person in people_a]
+    sig_b = [_person_signature(person) for person in people_b]
+
+    assert sig_a == sig_b
+
+
+def test_environment_create_random_people_registers_agents():
+    """Test created people are returned and registered in active agents."""
+    env = Environment(year=2026)
+    people = env.create_random_people(count=3, start_person_id=100, seed=7, with_interests=False)
+
+    assert len(people) == 3
+    assert len(env.agents_active) == 3
+    assert all(isinstance(person, Person) for person in people)
+    assert [person.id.id for person in people] == [100, 101, 102]
+    assert all(len(person.interests) == 0 for person in people)

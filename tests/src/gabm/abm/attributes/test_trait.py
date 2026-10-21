@@ -41,6 +41,16 @@ def test_trait_topic():
     assert "TraitTopic" in str(tt)
     assert "TraitTopic" in repr(tt)
 
+
+def test_trait_topic_default_topics():
+    """Test default Big Five trait topic catalog."""
+    topics = TraitTopic.default_topics()
+
+    assert len(topics) == 5
+    assert [topic_id.id for topic_id in topics.keys()] == [0, 1, 2, 3, 4]
+    assert topics[TraitTopicID(0)].trait_topic == "Openness to experience"
+    assert topics[TraitTopicID(4)].trait_topic == "Neuroticism"
+
 def test_trait_value():
     """
     Test the TraitValue class.
@@ -78,3 +88,16 @@ def test_trait():
     assert trait.get_description() == "very high"
     trait2 = Trait(tid, tvm, -999)  # Value not represented for this trait topic
     assert trait2.get_description() is None
+
+
+def test_trait_random_profile_reproducible_with_seed():
+    """Test random trait profile generation is deterministic when seeded."""
+    traits_a = Trait.random_profile(seed=2026)
+    traits_b = Trait.random_profile(seed=2026)
+
+    sig_a = sorted((topic_id.id, trait.value) for topic_id, trait in traits_a.items())
+    sig_b = sorted((topic_id.id, trait.value) for topic_id, trait in traits_b.items())
+
+    assert sig_a == sig_b
+    assert [topic_id for topic_id, _ in sig_a] == [0, 1, 2, 3, 4]
+    assert all(value in {-2, -1, 0, 1, 2} for _, value in sig_a)

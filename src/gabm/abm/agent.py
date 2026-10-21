@@ -22,7 +22,7 @@ from types import MappingProxyType
 # Local imports
 from gabm.core.id import GABMID
 from gabm.abm.attributes.gender import GenderID
-from gabm.abm.attributes.interest import InterestTopicID, Interest, InterestValue, InterestValueMap
+from gabm.abm.attributes.interest import InterestTopicID, InterestTopic, Interest, InterestValue, InterestValueMap
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
 from gabm.abm.attributes.region import RegionID, RegionMap
 from gabm.abm.attributes.education import EducationID, Education, EducationMap
@@ -303,6 +303,52 @@ class Person(Agent):
                 self.opinions[opinion_topic_id] = copy.deepcopy(opinion)
         self._initialize_trait_state(traits)
 
+    @classmethod
+    def with_random_traits(
+        cls,
+        person_id: PersonID,
+        environment: Environment,
+        year_of_birth: int,
+        gender_id: GenderID,
+        seed: int = None,
+        topic_ids: list[TraitTopicID] = None,
+        value_choices: list[int] = None,
+        generate_interests: bool = False,
+        interest_seed: int = None,
+    ) -> "Person":
+        """
+        Build a Person pre-populated with a random trait profile.
+
+        Args:
+            person_id: Unique person identifier.
+            environment: Simulation environment.
+            year_of_birth: Person year of birth.
+            gender_id: Person gender identifier.
+            seed: Optional deterministic seed for trait generation.
+            topic_ids: Optional trait topics to generate. Defaults to Big Five.
+            value_choices: Optional allowed trait values. Defaults to [-2,-1,0,1,2].
+            generate_interests: If True, also generate default trait-guided interests.
+            interest_seed: Optional deterministic seed for interest generation.
+
+        Returns:
+            A Person instance initialized with random traits.
+        """
+        random_traits = Trait.random_profile(
+            seed=seed,
+            topic_ids=topic_ids,
+            value_choices=value_choices,
+        )
+        person = cls(
+            person_id=person_id,
+            environment=environment,
+            year_of_birth=year_of_birth,
+            gender_id=gender_id,
+            traits=random_traits,
+        )
+        if generate_interests:
+            person.generate_default_interests(seed=interest_seed)
+        return person
+
     @staticmethod
     def _default_trait_description(value: int | float) -> str:
         if value <= -2:
@@ -552,7 +598,8 @@ class Person(Agent):
     def generate_interests_from_traits(self,
         seed: int = None,
         total_interest_topics: int = 9,
-        overwrite: bool = False) -> dict[InterestTopicID, 'Interest']:
+        overwrite: bool = False,
+        interest_topics: dict[InterestTopicID, InterestTopic] = None) -> dict[InterestTopicID, 'Interest']:
         """
         Generate interests influenced by traits.
 
@@ -565,6 +612,9 @@ class Person(Agent):
             total_interest_topics: Number of available interest topics to sample from.
             overwrite: If True, replace existing interests. If False and interests
                 already exist, leave them unchanged.
+            interest_topics: Optional topic catalog to sample from. If provided,
+                topic IDs in this dictionary are used instead of synthesizing IDs
+                from total_interest_topics.
 
         Return:
             The person's interest dictionary.
@@ -573,6 +623,21 @@ class Person(Agent):
             return self.interests
 
         if total_interest_topics <= 0:
+            self.interests = {}
+            return self.interests
+
+        if interest_topics is not None:
+            available_topic_ids = sorted(interest_topics.keys(), key=lambda topic_id: topic_id.id)
+        else:
+            default_topic_ids = InterestTopic.default_topic_ids()
+            if total_interest_topics <= len(default_topic_ids):
+                available_topic_ids = default_topic_ids[:total_interest_topics]
+            else:
+                available_topic_ids = list(default_topic_ids)
+                for topic_id in range(len(default_topic_ids), total_interest_topics):
+                    available_topic_ids.append(InterestTopicID(topic_id))
+
+        if len(available_topic_ids) == 0:
             self.interests = {}
             return self.interests
 
@@ -592,9 +657,9 @@ class Person(Agent):
         else:
             target_count = 2
 
-        target_count = max(1, min(target_count, total_interest_topics))
+        target_count = max(1, min(target_count, len(available_topic_ids)))
         rng = random if seed is None else random.Random(seed)
-        topic_ids = rng.sample(range(total_interest_topics), k=target_count)
+        topic_ids = rng.sample(available_topic_ids, k=target_count)
 
         if openness_value >= 1:
             interest_value_choices = [1, 2]
@@ -610,22 +675,44 @@ class Person(Agent):
         }
 
         generated_interests = {}
-        for topic_id in topic_ids:
-            interest_topic_id = InterestTopicID(topic_id)
+        for interest_topic_id in topic_ids:
             interest_value = rng.choice(interest_value_choices)
-            interest_value_obj = InterestValue(
-                interest_topic_id,
-                interest_value,
-                descriptions[interest_value],
-            )
+            interest_value_obj = InterestValue(interest_topic_id, interest_value, descriptions[interest_value])
             generated_interests[interest_topic_id] = Interest(
                 interest_topic_id,
-                InterestValueMap({interest_topic_id: interest_value_obj}),
+                InterestValueMap.default_for_topic(
+                    interest_topic_id,
+                    value=interest_value_obj.value,
+                    description=interest_value_obj.description,
+                ),
                 interest_value,
             )
 
         self.interests = generated_interests
         return self.interests
+
+    def generate_default_interests(
+        self,
+        seed: int = None,
+        overwrite: bool = False,
+    ) -> dict[InterestTopicID, 'Interest']:
+        """
+        Convenience wrapper to generate trait-guided interests from default topics.
+
+        Args:
+            seed: Optional deterministic seed.
+            overwrite: If True, replace existing interests.
+
+        Returns:
+            The person's interest dictionary.
+        """
+        default_topics = InterestTopic.default_topics()
+        return self.generate_interests_from_traits(
+            seed=seed,
+            overwrite=overwrite,
+            total_interest_topics=len(default_topics),
+            interest_topics=default_topics,
+        )
 
     def get_opinion(self, opinion_id: OpinionTopicID) -> 'Opinion':
         """
@@ -787,6 +874,60 @@ class Person(Agent):
                 other_agent.opinions = {topic: opinion for topic, opinion in avg_opinions.items()}
                 logging.info(f"{other_agent} is in the Neutral group, so opinion is updated to the average of { {k: v.value for k, v in avg_opinions.items()} }")
     
+    def get_persona(self) -> str:
+        """
+        Compile and return a persona as a string based on demographics and values.
+        """
+        sn = self.environment
+        age = self.get_age()
+        gender = sn.gender_map.get(self.gender_id).description
+        r: str = f"I am a {age} year old {gender}."
+        return r
+    
+    def get_interests_summary(self) -> str:
+        """
+        Compile and return a summary of interests as a string.
+        """
+        if not self.interests:
+            return "I have no interests."
+
+        def _join_topics(topic_names: list[str]) -> str:
+            if len(topic_names) == 1:
+                return topic_names[0]
+            if len(topic_names) == 2:
+                return f"{topic_names[0]} and {topic_names[1]}"
+            return ", ".join(topic_names[:-1]) + f", and {topic_names[-1]}"
+
+        default_topics = InterestTopic.default_topics()
+        entries = []
+        for interest in self.interests.values():
+            topic = default_topics.get(interest.id)
+            topic_name = topic.topic if topic is not None else str(interest.id)
+            entries.append((interest.id.id, topic_name, interest.value))
+
+        # Keep deterministic ordering for summaries.
+        entries.sort(key=lambda item: item[0])
+        values = [value for _, _, value in entries]
+
+        if all(value == 0 for value in values):
+            return "I don't currently have any interests."
+
+        most_interested_value = 2 if 2 in values else (1 if 1 in values else None)
+        most_disinterested_value = -2 if -2 in values else (-1 if -1 in values else None)
+
+        parts = []
+        if most_interested_value is not None:
+            interested_topics = [topic_name for _, topic_name, value in entries if value == most_interested_value]
+            parts.append(f"I am most interested in {_join_topics(interested_topics)}.")
+
+        if most_disinterested_value is not None:
+            disinterested_topics = [topic_name for _, topic_name, value in entries if value == most_disinterested_value]
+            parts.append(f"I am most disinterested in {_join_topics(disinterested_topics)}.")
+
+        if not parts:
+            return "I don't currently have any interests."
+        return " ".join(parts)
+ 
     def communicate_with_llm(self, message: str, model: str = None) -> dict:
         """
         Communicate with an LLM to get a response based on the input message and model.

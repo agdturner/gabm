@@ -23,6 +23,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 # Standard library imports
 import logging
+import random
 from typing import Dict
 # Local imports
 from gabm.core.id import GABMID
@@ -84,6 +85,27 @@ class TraitTopic():
             A string representation.
         """
         return self.__str__()
+
+    @classmethod
+    def default_topics(cls) -> Dict[TraitTopicID, "TraitTopic"]:
+        """Return the canonical Big Five trait topic catalog."""
+        topic_specs = [
+            (0, "Openness to experience", "A trait featuring imagination, curiosity, and broad interests."),
+            (1, "Conscientiousness", "A trait featuring organization, self-discipline, and goal-directed behavior."),
+            (2, "Extraversion", "A trait featuring sociability, assertiveness, and positive emotionality."),
+            (3, "Agreeableness", "A trait featuring cooperation, trust, and empathy toward others."),
+            (4, "Neuroticism", "A trait featuring emotional instability, anxiety, and mood variability."),
+        ]
+        topics: Dict[TraitTopicID, TraitTopic] = {}
+        for topic_id, topic, description in topic_specs:
+            trait_topic_id = TraitTopicID(topic_id)
+            topics[trait_topic_id] = cls(trait_topic_id, topic, description)
+        return topics
+
+    @classmethod
+    def default_topic_ids(cls) -> list[TraitTopicID]:
+        """Return default Big Five topic IDs in deterministic order."""
+        return list(cls.default_topics().keys())
 
 class TraitValue():
     """
@@ -211,6 +233,30 @@ class TraitValueMap():
             A string representation.
         """
         return self.__str__()
+
+    @classmethod
+    def default_for_topic(
+        cls,
+        trait_topic_id: TraitTopicID,
+        value: int = 0,
+        description: str = "neither high nor low"
+    ) -> "TraitValueMap":
+        """Build a default value map for one trait topic."""
+        default_value = TraitValue(trait_topic_id, value, description)
+        return cls({trait_topic_id: default_value})
+
+    @classmethod
+    def default_for_topics(
+        cls,
+        topic_ids: list[TraitTopicID],
+        value: int = 0,
+        description: str = "neither high nor low"
+    ) -> "TraitValueMap":
+        """Build default values for multiple trait topics."""
+        values: Dict[TraitTopicID, TraitValue] = {}
+        for topic_id in topic_ids:
+            values[topic_id] = TraitValue(topic_id, value, description)
+        return cls(values)
 
 class Trait():
     """
@@ -356,4 +402,42 @@ class Trait():
                 logging.warning(message)
                 raise ValueError(message)
         self.value = value
+
+    @classmethod
+    def random_profile(
+        cls,
+        seed: int = None,
+        topic_ids: list[TraitTopicID] = None,
+        value_choices: list[int] = None,
+    ) -> Dict[TraitTopicID, "Trait"]:
+        """
+        Build a random trait profile (default: Big Five topics).
+
+        Args:
+            seed: Optional deterministic seed.
+            topic_ids: Optional trait topics to generate. Defaults to Big Five.
+            value_choices: Optional allowed values. Defaults to [-2, -1, 0, 1, 2].
+
+        Returns:
+            Dictionary of TraitTopicID -> Trait.
+        """
+        rng = random if seed is None else random.Random(seed)
+        topic_ids = TraitTopic.default_topic_ids() if topic_ids is None else list(topic_ids)
+        value_choices = [-2, -1, 0, 1, 2] if value_choices is None else list(value_choices)
+
+        descriptions = {
+            -2: "very low",
+            -1: "low",
+            0: "neither high nor low",
+            1: "high",
+            2: "very high",
+        }
+
+        traits: Dict[TraitTopicID, Trait] = {}
+        for topic_id in topic_ids:
+            value = rng.choice(value_choices)
+            description = descriptions.get(value, f"value {value}")
+            trait_values = TraitValueMap.default_for_topic(topic_id, value=value, description=description)
+            traits[topic_id] = cls(topic_id, trait_values, value)
+        return traits
 

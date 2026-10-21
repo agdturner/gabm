@@ -7,9 +7,11 @@ __version__ = "0.4.0"
 __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 # Standard library imports
+import random
 from typing import Dict
 # Local imports
 from gabm.abm.agent import Agent
+from gabm.abm.attributes.gender import GenderID
 from gabm.abm.attributes.interest import InterestTopicID, InterestValue, InterestValueMap, Interest
 from gabm.abm.attributes.opinion import OpinionTopicID, OpinionValue, OpinionValueMap, Opinion
 from gabm.abm.group import Group
@@ -98,6 +100,61 @@ class Environment():
             An official string representation.
         """
         return self.__str__()
+
+    def create_random_people(
+        self,
+        count: int,
+        start_person_id: int = 1,
+        seed: int = None,
+        with_interests: bool = False,
+        year_of_birth_min: int = 1970,
+        year_of_birth_max: int = 2000,
+    ):
+        """
+        Create and register random Person agents.
+
+        Args:
+            count: Number of people to create.
+            start_person_id: First person ID; subsequent people increment by 1.
+            seed: Optional deterministic seed for reproducibility.
+            with_interests: If True, generate default trait-guided interests too.
+            year_of_birth_min: Minimum year of birth to sample.
+            year_of_birth_max: Maximum year of birth to sample.
+
+        Returns:
+            List of created Person instances.
+        """
+        if count < 0:
+            raise ValueError("count must be >= 0")
+        if year_of_birth_min > year_of_birth_max:
+            raise ValueError("year_of_birth_min must be <= year_of_birth_max")
+
+        # Local import avoids circular runtime dependency (agent imports Environment for typing).
+        from gabm.abm.agent import Person, PersonID
+
+        rng = random if seed is None else random.Random(seed)
+        people = []
+        for offset in range(count):
+            person_id = PersonID(start_person_id + offset)
+            year_of_birth = rng.randint(year_of_birth_min, year_of_birth_max)
+            gender_id = GenderID(rng.randint(0, 1))
+
+            trait_seed = rng.randint(0, 2**31 - 1)
+            interest_seed = rng.randint(0, 2**31 - 1) if with_interests else None
+
+            person = Person.with_random_traits(
+                person_id=person_id,
+                environment=self,
+                year_of_birth=year_of_birth,
+                gender_id=gender_id,
+                seed=trait_seed,
+                generate_interests=with_interests,
+                interest_seed=interest_seed,
+            )
+            self.agents_active[person.id] = person
+            people.append(person)
+
+        return people
 
 class Nation(Environment):
     """
