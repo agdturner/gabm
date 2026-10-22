@@ -64,6 +64,8 @@ def run(seed: int = 42, year: int = 2026):
 	print(first_speaker_persona)
 	first_speaker_interests = first_speaker.get_interests_summary()
 	print(first_speaker_interests)
+	first_speaker_values = first_speaker.get_values_summary()
+	print(first_speaker_values)
 	
 	# Second speaker
 	second_speaker = people[second_speaker_index]
@@ -72,6 +74,8 @@ def run(seed: int = 42, year: int = 2026):
 	print(second_speaker_persona)
 	second_speaker_interests = second_speaker.get_interests_summary()
 	print(second_speaker_interests)
+	second_speaker_values = second_speaker.get_values_summary()
+	print(second_speaker_values)
 
 	# 5. Set up the LLM
 	

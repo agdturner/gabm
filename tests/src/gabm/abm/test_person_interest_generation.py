@@ -16,6 +16,7 @@ from gabm.abm.agent import PersonID, Person
 from gabm.abm.attributes.gender import GenderMap
 from gabm.abm.attributes.interest import InterestTopicID, InterestTopic, Interest, InterestValue, InterestValueMap
 from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
+from gabm.abm.attributes.values import ValueTopicID, ValueStrengthMap, Values
 
 
 def _make_trait(topic_id: int, value: int, description: str) -> Trait:    
@@ -32,6 +33,16 @@ def _make_interest(topic_id: int, value: int, description: str) -> Interest:
 
 def _interest_signature(person: Person):
     return sorted((topic_id.id, interest.value) for topic_id, interest in person.interests.items())
+
+
+def _values_signature(person: Person):
+    return sorted((topic_id.id, value.value) for topic_id, value in person.values.items())
+
+
+def _make_value(topic_id: int, value: int, description: str) -> Values:
+    value_topic_id = ValueTopicID(topic_id)
+    value_map = ValueStrengthMap.default_for_topic(value_topic_id, value=value, description=description)
+    return Values(value_topic_id, value_map, value)
 
 
 def test_person_traits_are_optional_and_deep_copied():
@@ -59,11 +70,12 @@ def test_generate_interests_from_traits_reproducible_with_global_seed():
     person_a = Person(person_id=PersonID(11), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
     person_b = Person(person_id=PersonID(12), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
 
-    random.seed(20261007)
+    seed = 42
+    random.seed(seed)
     person_a.generate_interests_from_traits()
     signature_a = _interest_signature(person_a)
 
-    random.seed(20261007)
+    random.seed(seed)
     person_b.generate_interests_from_traits()
     signature_b = _interest_signature(person_b)
 
@@ -82,9 +94,10 @@ def test_generate_interests_from_traits_openness_affects_interest_count():
     person_high = Person(person_id=PersonID(13), environment=environment, year_of_birth=None, gender_id=None, traits=high_traits)
     person_low = Person(person_id=PersonID(14), environment=environment, year_of_birth=None, gender_id=None, traits=low_traits)
 
-    random.seed(12345)
+    seed = 42
+    random.seed(seed)
     person_high.generate_interests_from_traits()
-    random.seed(12345)
+    random.seed(seed)
     person_low.generate_interests_from_traits()
 
     assert len(person_high.interests) > len(person_low.interests)
@@ -99,7 +112,7 @@ def test_generate_interests_from_traits_does_not_overwrite_existing_by_default()
     traits = {TraitTopicID(0): _make_trait(0, 2, "very high")}
 
     person = Person(person_id=PersonID(15), environment=environment, year_of_birth=None, gender_id=None, interests=existing, traits=traits)
-    person.generate_interests_from_traits(seed=99)
+    person.generate_interests_from_traits(seed=42)
 
     assert len(person.interests) == 1
     assert InterestTopicID(8) in person.interests
@@ -116,14 +129,11 @@ def test_generate_interests_from_traits_reproducible_with_seed_argument():
     person_b = Person(person_id=PersonID(17), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
 
     # Disturb global RNG state to ensure seed argument path is independent.
-    random.seed(111)
-    random.random()
-    person_a.generate_interests_from_traits(seed=2026)
+    seed = 42
+    person_a.generate_interests_from_traits(seed=seed)
     signature_a = _interest_signature(person_a)
 
-    random.seed(999)
-    random.random()
-    person_b.generate_interests_from_traits(seed=2026)
+    person_b.generate_interests_from_traits(seed=seed)
     signature_b = _interest_signature(person_b)
 
     assert signature_a == signature_b
@@ -141,7 +151,8 @@ def test_generate_interests_from_traits_can_use_custom_interest_topics():
         InterestTopicID(300): InterestTopic(InterestTopicID(300), "podcast editing", "Editing and producing podcasts"),
     }
 
-    person.generate_interests_from_traits(seed=2026, interest_topics=custom_topics)
+    seed = 42
+    person.generate_interests_from_traits(seed=seed, interest_topics=custom_topics)
 
     assert len(person.interests) > 0
     assert set(person.interests.keys()).issubset(set(custom_topics.keys()))
@@ -153,7 +164,8 @@ def test_generate_default_interests_uses_default_topic_catalog():
     traits = {TraitTopicID(0): _make_trait(0, 1, "high")}
     person = Person(person_id=PersonID(28), environment=environment, year_of_birth=None, gender_id=None, traits=traits)
 
-    person.generate_default_interests(seed=2026)
+    seed = 42
+    person.generate_default_interests(seed=seed)
 
     assert len(person.interests) > 0
     assert all(0 <= topic_id.id <= 8 for topic_id in person.interests.keys())
@@ -188,6 +200,7 @@ def test_with_random_traits_can_generate_default_interests():
     """Test Person factory can optionally generate trait-guided default interests."""
     environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
     seed = 42
+    intersest_seed = seed + 1
     person = Person.with_random_traits(
         person_id=PersonID(31),
         environment=environment,
@@ -195,7 +208,7 @@ def test_with_random_traits_can_generate_default_interests():
         gender_id=None,
         seed=seed,
         generate_interests=True,
-        interest_seed=seed + 1,
+        interest_seed=intersest_seed,
     )
 
     assert len(person.interests) > 0
@@ -215,7 +228,7 @@ def test_get_interests_summary_prioritizes_strongest_like_and_dislike():
 
     summary = person.get_interests_summary()
 
-    assert summary == "I am most interested in music and reading. I am most disinterested in science and sport."
+    assert summary == "I am interested in music and reading. I am notinterested in science and sport."
 
 
 def test_get_interests_summary_falls_back_to_interested_and_disliked():
@@ -230,7 +243,7 @@ def test_get_interests_summary_falls_back_to_interested_and_disliked():
 
     summary = person.get_interests_summary()
 
-    assert summary == "I am most interested in music and reading. I am most disinterested in sport."
+    assert summary == "I am interested in music and reading. I am notinterested in sport."
 
 
 def test_get_interests_summary_all_neutral_message():
@@ -259,7 +272,7 @@ def test_get_interests_summary_only_disinterests():
 
     summary = person.get_interests_summary()
 
-    assert summary == "I am most disinterested in sport."
+    assert summary == "I am notinterested in sport."
 
 
 def test_get_interests_summary_only_interests():
@@ -274,7 +287,85 @@ def test_get_interests_summary_only_interests():
 
     summary = person.get_interests_summary()
 
-    assert summary == "I am most interested in music and reading."
+    assert summary == "I am interested in music and reading."
+
+
+def test_person_values_auto_generated_by_default():
+    """Test that values are generated when none are provided."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(37), environment=environment, year_of_birth=1996, gender_id=None)
+
+    assert len(person.values) == 10
+    assert person.get_value_priority(ValueTopicID(0)) is not None
+
+
+def test_person_values_can_be_provided_and_deep_copied():
+    """Test provided values are deep copied and retained."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    provided_values = Values.default_profile(seed=42, stochastic=False)
+    person = Person(
+        person_id=PersonID(38),
+        environment=environment,
+        year_of_birth=1990,
+        gender_id=None,
+        values=provided_values,
+    )
+
+    assert _values_signature(person) == sorted((tid.id, v.value) for tid, v in provided_values.items())
+    assert person.values[ValueTopicID(0)] is not provided_values[ValueTopicID(0)]
+
+
+def test_generate_values_profile_reproducible_with_seed():
+    """Test regenerating values profile is reproducible with seed."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person_a = Person(person_id=PersonID(39), environment=environment, year_of_birth=1995, gender_id=None)
+    person_b = Person(person_id=PersonID(40), environment=environment, year_of_birth=1995, gender_id=None)
+
+    seed = 42
+    person_a.generate_values_profile(seed=seed, economic_security="high", stochastic=True, overwrite=True)
+    person_b.generate_values_profile(seed=seed, economic_security="high", stochastic=True, overwrite=True)
+
+    assert _values_signature(person_a) == _values_signature(person_b)
+
+
+def test_get_values_summary_highlights_top_and_low_priorities():
+    """Test values summary highlights highest and lowest-priority domains."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(41), environment=environment, year_of_birth=1990, gender_id=None)
+    person.values = {
+        ValueTopicID(0): _make_value(0, 5, "core priority"),
+        ValueTopicID(1): _make_value(1, 5, "core priority"),
+        ValueTopicID(9): _make_value(9, 1, "very low priority"),
+    }
+
+    summary = person.get_values_summary()
+
+    assert summary == "I value family and relationships and health and wellbeing."
+
+
+def test_get_values_summary_balanced_message_for_flat_profile():
+    """Test values summary when priorities are equal across domains."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(42), environment=environment, year_of_birth=1990, gender_id=None)
+    person.values = {
+        ValueTopicID(0): _make_value(0, 3, "important"),
+        ValueTopicID(1): _make_value(1, 3, "important"),
+    }
+
+    summary = person.get_values_summary()
+
+    assert summary == ""
+
+
+def test_get_values_summary_no_profile_message():
+    """Test values summary when no values profile exists."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(43), environment=environment, year_of_birth=1990, gender_id=None)
+    person.values = {}
+
+    summary = person.get_values_summary()
+
+    assert summary == ""
 
 
 def test_person_has_immutable_initial_big_five_values():

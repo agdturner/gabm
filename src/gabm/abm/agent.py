@@ -30,6 +30,7 @@ from gabm.abm.attributes.employment import EmploymentID, EmploymentMap
 from gabm.abm.attributes.health import HealthID, HealthMap
 from gabm.abm.attributes.income import IncomeID, IncomeMap
 from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
+from gabm.abm.attributes.values import ValueTopicID, Values
 from gabm.abm.attributes.wealth import WealthID, Wealth
 # TYPE_CHECKING is used to avoid circular imports.
 if TYPE_CHECKING:
@@ -233,7 +234,11 @@ class Person(Agent):
         year_of_birth: int, gender_id: GenderID,
         traits: dict[TraitTopicID, 'Trait'] = None,
         interests: dict[InterestTopicID, 'Interest'] = None,
-        opinions: dict[OpinionTopicID, 'Opinion'] = None):
+        opinions: dict[OpinionTopicID, 'Opinion'] = None,
+        values: dict[ValueTopicID, 'Values'] = None,
+        value_economic_security: str = "medium",
+        value_stochastic: bool = False,
+        value_seed: int = None):
         """
         Initialize
 
@@ -244,6 +249,10 @@ class Person(Agent):
             gender_id: The GenderID attributed.
             traits: A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.interests: A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
             opinions: A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
+            values: A dictionary of value-priority attributes where keys are ValueTopicIDs and values are Values objects.
+            value_economic_security: Economic-security context used when auto-generating values.
+            value_stochastic: If True, include stochastic jitter when auto-generating values.
+            value_seed: Optional deterministic seed used when auto-generating values.
             
         """
         super().__init__(agent_id=person_id, environment=environment)
@@ -285,6 +294,7 @@ class Person(Agent):
             logging.warning(f"Age ({self.get_age()}) is unusually high.")
         self.interests = {}
         self.opinions = {}
+        self.values = {}
         # `base_traits` are mutable and can change during simulation (e.g., reflection).
         self.base_traits = {}
         # Backward-compatible alias used by existing code/tests.
@@ -301,6 +311,17 @@ class Person(Agent):
         if opinions is not None:
             for opinion_topic_id, opinion in opinions.items():
                 self.opinions[opinion_topic_id] = copy.deepcopy(opinion)
+        # If values are provided, deep copy them to the person so that they have their own value priorities.
+        if values is not None:
+            for value_topic_id, value_obj in values.items():
+                self.values[value_topic_id] = copy.deepcopy(value_obj)
+        else:
+            self.generate_values_profile(
+                seed=value_seed,
+                economic_security=value_economic_security,
+                stochastic=value_stochastic,
+                overwrite=True,
+            )
         self._initialize_trait_state(traits)
 
     @classmethod
@@ -315,6 +336,10 @@ class Person(Agent):
         value_choices: list[int] = None,
         generate_interests: bool = False,
         interest_seed: int = None,
+        generate_values: bool = False,
+        value_seed: int = None,
+        value_economic_security: str = "medium",
+        value_stochastic: bool = True,
     ) -> "Person":
         """
         Build a Person pre-populated with a random trait profile.
@@ -329,6 +354,10 @@ class Person(Agent):
             value_choices: Optional allowed trait values. Defaults to [-2,-1,0,1,2].
             generate_interests: If True, also generate default trait-guided interests.
             interest_seed: Optional deterministic seed for interest generation.
+            generate_values: If True, regenerate values profile after creation.
+            value_seed: Optional deterministic seed for values-profile generation.
+            value_economic_security: Economic-security context for values profile.
+            value_stochastic: If True, include stochastic jitter in values profile.
 
         Returns:
             A Person instance initialized with random traits.
@@ -347,6 +376,13 @@ class Person(Agent):
         )
         if generate_interests:
             person.generate_default_interests(seed=interest_seed)
+        if generate_values:
+            person.generate_values_profile(
+                seed=value_seed,
+                economic_security=value_economic_security,
+                stochastic=value_stochastic,
+                overwrite=True,
+            )
         return person
 
     @staticmethod
@@ -447,6 +483,15 @@ class Person(Agent):
             The Interest object for the interest_id, or None if not found.
         """
         return self.interests.get(interest_id)
+
+    def get_value_priority(self, value_topic_id: ValueTopicID) -> 'Values':
+        """
+        Args:
+            value_topic_id: The ID of the value topic to get.
+        Return:
+            The Values object for the topic, or None if not found.
+        """
+        return self.values.get(value_topic_id)
 
     def get_trait(self, trait_id: TraitTopicID) -> 'Trait':
         """
@@ -714,6 +759,41 @@ class Person(Agent):
             interest_topics=default_topics,
         )
 
+    def generate_values_profile(
+        self,
+        seed: int = None,
+        economic_security: str = "medium",
+        stochastic: bool = True,
+        overwrite: bool = False,
+    ) -> dict[ValueTopicID, 'Values']:
+        """
+        Generate value priorities informed by demographic and economic context.
+
+        Args:
+            seed: Optional deterministic seed.
+            economic_security: One of "low", "medium", "high".
+            stochastic: If True, include small random variation.
+            overwrite: If True, replace existing values.
+
+        Return:
+            The person's value-priority dictionary.
+        """
+        if len(self.values) > 0 and not overwrite:
+            return self.values
+
+        gender = self.get_gender()
+        if gender in {"none", "unknown"}:
+            gender = None
+
+        self.values = Values.default_profile(
+            seed=seed,
+            age=self.get_age(),
+            gender=gender,
+            economic_security=economic_security,
+            stochastic=stochastic,
+        )
+        return self.values
+
     def get_opinion(self, opinion_id: OpinionTopicID) -> 'Opinion':
         """
         Args:
@@ -918,15 +998,55 @@ class Person(Agent):
         parts = []
         if most_interested_value is not None:
             interested_topics = [topic_name for _, topic_name, value in entries if value == most_interested_value]
-            parts.append(f"I am most interested in {_join_topics(interested_topics)}.")
+            parts.append(f"I am interested in {_join_topics(interested_topics)}.")
 
         if most_disinterested_value is not None:
             disinterested_topics = [topic_name for _, topic_name, value in entries if value == most_disinterested_value]
-            parts.append(f"I am most disinterested in {_join_topics(disinterested_topics)}.")
+            parts.append(f"I am notinterested in {_join_topics(disinterested_topics)}.")
 
         if not parts:
-            return "I don't currently have any interests."
+            return "I'm not sure what I am interested in."
         return " ".join(parts)
+
+    def get_values_summary(self) -> str:
+        """
+        Compile and return a summary of value priorities as a string.
+        """
+        if not self.values:
+            return ""
+
+        def _join_topics(topic_names: list[str]) -> str:
+            if len(topic_names) == 1:
+                return topic_names[0]
+            if len(topic_names) == 2:
+                return f"{topic_names[0]} and {topic_names[1]}"
+            return ", ".join(topic_names[:-1]) + f", and {topic_names[-1]}"
+
+        # Build deterministic entries by topic ID.
+        topic_lookup = {}
+        from gabm.abm.attributes.values import ValueTopic
+        for topic_id, topic in ValueTopic.default_topics().items():
+            topic_lookup[topic_id] = topic.topic
+
+        entries = []
+        for value_obj in self.values.values():
+            topic_name = topic_lookup.get(value_obj.id, str(value_obj.id))
+            entries.append((value_obj.id.id, topic_name, value_obj.value))
+        entries.sort(key=lambda item: item[0])
+
+        priorities = [priority for _, _, priority in entries]
+        if len(set(priorities)) == 1:
+            return ""
+
+        max_priority = max(priorities)
+        min_priority = min(priorities)
+
+        top_topics = [topic_name for _, topic_name, priority in entries if priority == max_priority]
+        low_topics = [topic_name for _, topic_name, priority in entries if priority == min_priority]
+
+        return (
+            f"I value {_join_topics(top_topics)}."
+        )
  
     def communicate_with_llm(self, message: str, model: str = None) -> dict:
         """
