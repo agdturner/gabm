@@ -9,6 +9,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 # Standard library imports
 import random
 from typing import Dict
+from pathlib import Path
 # Local imports
 from gabm.abm.agent import Agent
 from gabm.abm.attributes.gender import GenderID
@@ -109,6 +110,8 @@ class Environment():
         with_interests: bool = False,
         year_of_birth_min: int = 1970,
         year_of_birth_max: int = 2000,
+        ons_male_file: Path = None,
+        ons_female_file: Path = None,
     ):
         """
         Create and register random Person agents.
@@ -120,6 +123,8 @@ class Environment():
             with_interests: If True, generate default trait-guided interests too.
             year_of_birth_min: Minimum year of birth to sample.
             year_of_birth_max: Maximum year of birth to sample.
+            ons_male_file: Optional path to ONS male names CSV used for Person auto-naming.
+            ons_female_file: Optional path to ONS female names CSV used for Person auto-naming.
 
         Returns:
             List of created Person instances.
@@ -147,6 +152,8 @@ class Environment():
                 environment=self,
                 year_of_birth=year_of_birth,
                 gender_id=gender_id,
+                ons_male_file=ons_male_file,
+                ons_female_file=ons_female_file,
                 seed=trait_seed,
                 generate_interests=with_interests,
                 interest_seed=interest_seed,

@@ -215,37 +215,6 @@ def test_with_random_traits_can_generate_default_interests():
     assert all(0 <= topic_id.id <= 8 for topic_id in person.interests.keys())
 
 
-def test_get_interests_summary_prioritizes_strongest_like_and_dislike():
-    """Test summary highlights strongest interests and disinterests."""
-    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
-    person = Person(person_id=PersonID(32), environment=environment, year_of_birth=None, gender_id=None)
-    person.interests = {
-        InterestTopicID(3): _make_interest(3, 2, "very interested"),
-        InterestTopicID(7): _make_interest(7, 2, "very interested"),
-        InterestTopicID(4): _make_interest(4, -2, "strongly dislike"),
-        InterestTopicID(0): _make_interest(0, -2, "strongly dislike"),
-    }
-
-    summary = person.get_interests_summary()
-
-    assert summary == "I am interested in music and reading. I am notinterested in science and sport."
-
-
-def test_get_interests_summary_falls_back_to_interested_and_disliked():
-    """Test summary fallback when no very interested/disinterested values exist."""
-    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
-    person = Person(person_id=PersonID(33), environment=environment, year_of_birth=None, gender_id=None)
-    person.interests = {
-        InterestTopicID(3): _make_interest(3, 1, "interested"),
-        InterestTopicID(7): _make_interest(7, 1, "interested"),
-        InterestTopicID(4): _make_interest(4, -1, "dislike"),
-    }
-
-    summary = person.get_interests_summary()
-
-    assert summary == "I am interested in music and reading. I am notinterested in sport."
-
-
 def test_get_interests_summary_all_neutral_message():
     """Test summary for all-neutral interests."""
     environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
@@ -260,6 +229,37 @@ def test_get_interests_summary_all_neutral_message():
     assert summary == "I don't currently have any interests."
 
 
+def test_get_interests_summary_prioritizes_strongest_like_and_dislike():
+    """Test summary highlights strongest interests and disinterests."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(32), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(3): _make_interest(3, 2, "very interested"),
+        InterestTopicID(7): _make_interest(7, 2, "very interested"),
+        InterestTopicID(4): _make_interest(4, -2, "strongly dislike"),
+        InterestTopicID(0): _make_interest(0, -2, "strongly dislike"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am interested in music and reading. I am not interested in science and sport."
+
+
+def test_get_interests_summary_falls_back_to_interested_and_disliked():
+    """Test summary fallback when no very interested/disinterested values exist."""
+    environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
+    person = Person(person_id=PersonID(33), environment=environment, year_of_birth=None, gender_id=None)
+    person.interests = {
+        InterestTopicID(3): _make_interest(3, 1, "interested"),
+        InterestTopicID(7): _make_interest(7, 1, "interested"),
+        InterestTopicID(4): _make_interest(4, -1, "dislike"),
+    }
+
+    summary = person.get_interests_summary()
+
+    assert summary == "I am interested in music and reading. I am not interested in sport."
+
+
 def test_get_interests_summary_only_disinterests():
     """Test summary when only disinterests are present."""
     environment = Environment(year=2026, name="Earth", gender_map=GenderMap())
@@ -272,7 +272,7 @@ def test_get_interests_summary_only_disinterests():
 
     summary = person.get_interests_summary()
 
-    assert summary == "I am notinterested in sport."
+    assert summary == "I am not interested in sport."
 
 
 def test_get_interests_summary_only_interests():

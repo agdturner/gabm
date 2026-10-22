@@ -34,6 +34,7 @@ Recent agent-state additions include layered trait modeling support:
 - Mutable base traits that can evolve during simulation.
 - Structured trait belief state for self and higher-order beliefs about other agents.
 - Trait-state export/import helpers for reproducible checkpoints and replay.
+- Person-level name state with explicit assignment support and ONS-backed auto-assignment when no name is provided.
 
 
 ## License
@@ -43,7 +44,7 @@ See [LICENSE](LICENSE).
 ## Code of Conduct and Reporting
 Please see our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on expected behavior and reporting issues.
 
-For security or conduct concerns, you can also use the `Contact maintainers` link on the GitHub repository, or see the [SECURITY.md](SECURITY.md) file in the documentation for details on confidential reporting.
+For security or conduct concerns, you can also use the `Contact maintainers` link on the GitHub repository, or see the [.github/SECURITY.md](.github/SECURITY.md) file in the documentation for details on confidential reporting.
 
 
 ## User Guide

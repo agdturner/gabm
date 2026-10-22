@@ -129,6 +129,79 @@ The Makefile provides a `run-local` target for convenience. You can pass argumen
     make run-local ARGS="--mode survey"
     ```
 
+To run the dedicated chat example simulation with ONS-backed names:
+
+```bash
+make run-example-chat
+```
+
+### Running the Chat Example and Interpreting Results
+
+The chat example creates a small set of people and has them exchange LLM-generated messages in rounds. It is useful for testing:
+
+- LLM provider wiring and model selection
+- reproducibility behavior (same seed, with and without cache replay)
+- output artifact generation for comparison across runs
+
+Run with defaults:
+
+```bash
+make run-example-chat
+```
+
+Run with an explicit seed, provider, model, and run ID:
+
+```bash
+make run-example-chat SEED=42 LLM_SERVICE=openai LLM_MODEL=gpt-4o-mini RUN_ID=seed42_openai_a
+```
+
+Use an OpenAI request seed (best-effort deterministic sampling):
+
+```bash
+make run-example-chat SEED=42 LLM_SEED=42 RUN_ID=seed42_openai_seeded_a
+```
+
+Force live prompting (disable cache replay):
+
+```bash
+make run-example-chat SEED=42 NO_CACHE=1 RUN_ID=seed42_live_a
+```
+
+Each run writes outputs to:
+
+- `data/output/examples/chat/<run-directory>/conversation_transcript.txt`
+- `data/output/examples/chat/<run-directory>/console_output.txt`
+- `data/output/examples/chat/<run-directory>/run_metadata.json`
+- `data/output/examples/chat/<run-directory>/prompt_response_cache_delta.jsonl`
+
+The `run_metadata.json` file records key run settings such as seed, provider, model, and whether cache was enabled.
+For OpenAI-backed runs, it also records `llm_seed` and any observed `openai_system_fingerprints` values.
+
+Compare two runs:
+
+```bash
+make compare-example-chat RUN_A=seed42_openai_a RUN_B=seed42_openai_b
+```
+
+Expected behavior:
+
+- With cache replay enabled (default), repeating the same prompts typically yields identical transcripts.
+- With `NO_CACHE=1`, prompts are sent live each time, so two same-seed runs may differ.
+- For OpenAI live runs, using the same `LLM_SEED` and identical request settings improves reproducibility, but does not guarantee perfect determinism.
+- If `openai_system_fingerprints` differs between runs, backend changes may explain output differences.
+- Metadata comparison ignores volatile fields such as timestamp and run directory path.
+
+You can override the seed, year, and ONS file paths if needed:
+
+```bash
+make run-example-chat SEED=42 YEAR=2026 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv
+```
+
+In the chat example, participant names are now part of `Person` state:
+- If a name is explicitly provided when creating a person, that name is used.
+- If no name is provided, `Person` auto-assigns a name from the ONS files (using year of birth and gender).
+- The chat simulation reads names directly from each person instance.
+
 
 When you run GABM (e.g., with `python3 -m gabm`), the default behavior is to execute an Agent-Based Model (ABM) simulation. Here’s what happens:
 

@@ -26,7 +26,7 @@
 # Caution: Some commands (like git-clean, release, and delete-release) can modify your git history or delete tags. Always review the scripts they call (in the scripts/ directory) to ensure they do what you expect before running these commands.
 
 # Phony targets (not actual files)
-.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches llm-drift-check sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed
+.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches llm-drift-check sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed run-example-chat compare-example-chat
 
 # Show available Makefile commands
 help:
@@ -52,6 +52,8 @@ help:
 	@echo "  bump-version     - Bump the project version (usage: make bump-version part=patch|minor|major)"
 	@echo "  run-local        - Run gabm using local source (development mode)"
 	@echo "  run-installed    - Run gabm using installed package (production mode)"
+	@echo "  run-example-chat - Run chat example (usage: make run-example-chat SEED=42 YEAR=2026 ONS_MALE=... ONS_FEMALE=... OUTPUT_ROOT=... RUN_ID=... NO_CACHE=1)"
+	@echo "  compare-example-chat - Compare two chat run output directories (usage: make compare-example-chat RUN_A=<dir> RUN_B=<dir> [OUTPUT_ROOT=...])"
 	@echo "Use 'make <target>' to run a specific target. For targets that require additional variables (like release and sync-feature), include them as shown in the usage instructions."
 
 # Run all tests (requires pytest)
@@ -220,3 +222,61 @@ run-local:
 # Run gabm using installed package (production mode)
 run-installed:
 	python3 -m gabm $(ARGS)
+
+# Run chat example with optional ONS file, output root, and run-id overrides
+# Usage: make run-example-chat SEED=42 YEAR=2026 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat RUN_ID=my_run_id NO_CACHE=1 LLM_SEED=42
+run-example-chat:
+	@RUN_ID_ARG=""; \
+	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
+	OUTPUT_ROOT_ARG=""; \
+	if [ -n "$$OUTPUT_ROOT" ]; then OUTPUT_ROOT_ARG=" --output-root $$OUTPUT_ROOT"; fi; \
+	LLM_SEED_ARG=""; \
+	if [ -n "$$LLM_SEED" ]; then LLM_SEED_ARG=" --llm-seed $$LLM_SEED"; fi; \
+	NO_CACHE_ARG=""; \
+	if [ -n "$$NO_CACHE" ]; then NO_CACHE_ARG=" --no-cache"; fi; \
+	PYTHONPATH=src python3 src/gabm/examples/chat/sim.py --llm-service openai --model gpt-4o-mini --seed $${SEED:-42} --year $${YEAR:-2026} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+
+# Compare two chat example runs by diffing their captured artifacts.
+# Usage: make compare-example-chat RUN_A=seed42_run1 RUN_B=seed42_run2 [OUTPUT_ROOT=data/output/examples/chat]
+compare-example-chat:
+	@ROOT=$${OUTPUT_ROOT:-data/output/examples/chat}; \
+	if [ -z "$(RUN_A)" ] || [ -z "$(RUN_B)" ]; then \
+		echo "Error: RUN_A and RUN_B must be set."; \
+		echo "Usage: make compare-example-chat RUN_A=<dir> RUN_B=<dir> [OUTPUT_ROOT=...]"; \
+		exit 1; \
+	fi; \
+	A_DIR="$$ROOT/$(RUN_A)"; \
+	B_DIR="$$ROOT/$(RUN_B)"; \
+	if [ ! -d "$$A_DIR" ]; then echo "Error: missing directory $$A_DIR"; exit 1; fi; \
+	if [ ! -d "$$B_DIR" ]; then echo "Error: missing directory $$B_DIR"; exit 1; fi; \
+	STATUS=0; \
+	for FILE in conversation_transcript.txt console_output.txt prompt_response_cache_delta.jsonl run_metadata.json; do \
+		A_FILE="$$A_DIR/$$FILE"; \
+		B_FILE="$$B_DIR/$$FILE"; \
+		if [ ! -f "$$A_FILE" ] || [ ! -f "$$B_FILE" ]; then \
+			echo "[MISSING] $$FILE (present? A=$$( [ -f "$$A_FILE" ] && echo yes || echo no ), B=$$( [ -f "$$B_FILE" ] && echo yes || echo no ))"; \
+			STATUS=1; \
+			continue; \
+		fi; \
+		if [ "$$FILE" = "run_metadata.json" ]; then \
+			if python3 -c 'import json,sys; a=json.load(open(sys.argv[1], "r", encoding="utf-8")); b=json.load(open(sys.argv[2], "r", encoding="utf-8")); [d.pop("run_dir", None) for d in (a, b)]; [d.pop("created_at", None) for d in (a, b)]; raise SystemExit(0 if a == b else 1)' "$$A_FILE" "$$B_FILE"; then \
+				echo "[IDENTICAL] $$FILE (ignoring volatile fields: run_dir, created_at)"; \
+			else \
+				echo "[DIFFERENT] $$FILE (after ignoring volatile fields: run_dir, created_at)"; \
+				STATUS=1; \
+			fi; \
+			continue; \
+		fi; \
+		if diff -u "$$A_FILE" "$$B_FILE" > /dev/null; then \
+			echo "[IDENTICAL] $$FILE"; \
+		else \
+			echo "[DIFFERENT] $$FILE"; \
+			STATUS=1; \
+		fi; \
+	done; \
+	if [ $$STATUS -eq 0 ]; then \
+		echo "All compared artifacts are identical."; \
+	else \
+		echo "Differences detected. Re-run individual diff commands for details."; \
+	fi; \
+	exit $$STATUS

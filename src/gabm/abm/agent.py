@@ -19,6 +19,7 @@ import copy
 import logging
 import random
 from types import MappingProxyType
+from pathlib import Path
 # Local imports
 from gabm.core.id import GABMID
 from gabm.abm.attributes.gender import GenderID
@@ -32,6 +33,7 @@ from gabm.abm.attributes.income import IncomeID, IncomeMap
 from gabm.abm.attributes.trait import TraitTopicID, TraitValue, TraitValueMap, Trait
 from gabm.abm.attributes.values import ValueTopicID, Values
 from gabm.abm.attributes.wealth import WealthID, Wealth
+from gabm.abm.data.names_ons import choose_name_for_person, get_default_ons_name_paths, load_ons_name_table
 # TYPE_CHECKING is used to avoid circular imports.
 if TYPE_CHECKING:
     from gabm.abm.environment import Environment, Nation
@@ -230,12 +232,17 @@ class Person(Agent):
             The keys are OpinionTopicIDs, and the values are Opinion objects.
             These are deep copied when the Person is initialised, so that the Person has their own opinions.
     """
+    _ons_table_cache = {}
+
     def __init__(self, person_id: PersonID, environment: Environment,
         year_of_birth: int, gender_id: GenderID,
+        name: str = None,
         traits: dict[TraitTopicID, 'Trait'] = None,
         interests: dict[InterestTopicID, 'Interest'] = None,
         opinions: dict[OpinionTopicID, 'Opinion'] = None,
         values: dict[ValueTopicID, 'Values'] = None,
+        ons_male_file: Path = None,
+        ons_female_file: Path = None,
         value_economic_security: str = "medium",
         value_stochastic: bool = False,
         value_seed: int = None):
@@ -247,9 +254,12 @@ class Person(Agent):
             environment: The Environment the Person instance belongs to.
             year_of_birth: The year the person was born.
             gender_id: The GenderID attributed.
+            name: Optional display name for the person. If not provided, auto-assigned from ONS tables.
             traits: A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.interests: A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
             opinions: A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
             values: A dictionary of value-priority attributes where keys are ValueTopicIDs and values are Values objects.
+            ons_male_file: Optional path to ONS male names CSV for auto-assignment.
+            ons_female_file: Optional path to ONS female names CSV for auto-assignment.
             value_economic_security: Economic-security context used when auto-generating values.
             value_stochastic: If True, include stochastic jitter when auto-generating values.
             value_seed: Optional deterministic seed used when auto-generating values.
@@ -292,6 +302,12 @@ class Person(Agent):
                 self.year_of_birth = self.environment.year
         if self.get_age() > 200:
             logging.warning(f"Age ({self.get_age()}) is unusually high.")
+
+        if name is None:
+            self.name = self._assign_name_from_ons(ons_male_file=ons_male_file, ons_female_file=ons_female_file)
+        else:
+            self.set_name(name)
+
         self.interests = {}
         self.opinions = {}
         self.values = {}
@@ -325,12 +341,66 @@ class Person(Agent):
         self._initialize_trait_state(traits)
 
     @classmethod
+    def _load_ons_table_cached(cls, csv_path: Path):
+        resolved = Path(csv_path).resolve()
+        table = cls._ons_table_cache.get(resolved)
+        if table is None:
+            table = load_ons_name_table(resolved)
+            cls._ons_table_cache[resolved] = table
+        return table
+
+    def _sex_for_name_selection(self) -> str:
+        gender_text = str(self.get_gender()).strip().lower()
+        if "female" in gender_text:
+            return "female"
+        if "male" in gender_text:
+            return "male"
+        return "any"
+
+    def _assign_name_from_ons(self, ons_male_file: Path = None, ons_female_file: Path = None) -> str:
+        default_male, default_female = get_default_ons_name_paths()
+        male_path = ons_male_file or default_male
+        female_path = ons_female_file or default_female
+        male_table = self._load_ons_table_cached(male_path)
+        female_table = self._load_ons_table_cached(female_path)
+
+        person_id_num = self.id.id if hasattr(self.id, "id") else int(self.id)
+        gender_id_num = 0 if self.gender_id is None else self.gender_id.id
+        birth_year_num = 0 if self.year_of_birth is None else self.year_of_birth
+        seed = ((person_id_num * 1000003) + (gender_id_num * 101) + (birth_year_num * 9176) + self.environment.year) & 0xFFFFFFFF
+        rng = random.Random(seed)
+        return choose_name_for_person(
+            rng=rng,
+            male_table=male_table,
+            female_table=female_table,
+            sex=self._sex_for_name_selection(),
+            birth_year=self.year_of_birth,
+            used_names=None,
+        )
+
+    def set_name(self, name: str):
+        """Set the person name."""
+        if name is None:
+            raise ValueError("name cannot be None")
+        candidate = str(name).strip()
+        if not candidate:
+            raise ValueError("name cannot be empty")
+        self.name = candidate
+
+    def get_name(self) -> str:
+        """Get the person name."""
+        return self.name
+
+    @classmethod
     def with_random_traits(
         cls,
         person_id: PersonID,
         environment: Environment,
         year_of_birth: int,
         gender_id: GenderID,
+        name: str = None,
+        ons_male_file: Path = None,
+        ons_female_file: Path = None,
         seed: int = None,
         topic_ids: list[TraitTopicID] = None,
         value_choices: list[int] = None,
@@ -349,6 +419,9 @@ class Person(Agent):
             environment: Simulation environment.
             year_of_birth: Person year of birth.
             gender_id: Person gender identifier.
+            name: Optional display name for the person.
+            ons_male_file: Optional path to ONS male names CSV for auto-assignment.
+            ons_female_file: Optional path to ONS female names CSV for auto-assignment.
             seed: Optional deterministic seed for trait generation.
             topic_ids: Optional trait topics to generate. Defaults to Big Five.
             value_choices: Optional allowed trait values. Defaults to [-2,-1,0,1,2].
@@ -372,6 +445,9 @@ class Person(Agent):
             environment=environment,
             year_of_birth=year_of_birth,
             gender_id=gender_id,
+            name=name,
+            ons_male_file=ons_male_file,
+            ons_female_file=ons_female_file,
             traits=random_traits,
         )
         if generate_interests:
@@ -902,6 +978,8 @@ class Person(Agent):
         desc = f"I am {age} years old. "
         if self.gender_id is not None:
             desc += f"I am {self.get_gender()}. "
+        if getattr(self, "name", None):
+            desc += f"My name is {self.name}. "
         return desc
 
     def communicate(self, i: int):
@@ -1002,7 +1080,7 @@ class Person(Agent):
 
         if most_disinterested_value is not None:
             disinterested_topics = [topic_name for _, topic_name, value in entries if value == most_disinterested_value]
-            parts.append(f"I am notinterested in {_join_topics(disinterested_topics)}.")
+            parts.append(f"I am not interested in {_join_topics(disinterested_topics)}.")
 
         if not parts:
             return "I'm not sure what I am interested in."
@@ -1097,9 +1175,12 @@ class Citizen(Person):
     def __init__(self, citizen_id: CitizenID, nation: Nation,
         year_of_birth: int = None,
         gender_id: GenderID = None,
+        name: str = None,
         traits: dict = None,
         opinions: dict = None,
         interests: dict = None,
+        ons_male_file: Path = None,
+        ons_female_file: Path = None,
         region_id: int = None,
         education_id: int = None,
         ethnicity_id: int = None,
@@ -1117,12 +1198,18 @@ class Citizen(Person):
                 Year of birth.
             gender_id (GenderID):
                 The ID of the gender attributed.
+            name (str):
+                Optional display name for the citizen.
             traits (dict):
                 A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.
             interests (dict):
                 A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
             opinions (dict):
                 A dictionary of opinions, where keys are OpinionTopicIDs and values are Opinion objects.
+            ons_male_file (Path):
+                Optional path to ONS male names CSV used for auto-naming.
+            ons_female_file (Path):
+                Optional path to ONS female names CSV used for auto-naming.
             region_id (RegionID):
                 The Id RegionID.
             education_id (EducationID):
@@ -1135,8 +1222,11 @@ class Citizen(Person):
                 The agent's income level, represented as an IncomeID.
         """
         super().__init__(person_id=citizen_id, environment=nation,
-            year_of_birth=year_of_birth, gender_id=gender_id, 
-            traits=traits, interests=interests, opinions=opinions)
+            year_of_birth=year_of_birth, gender_id=gender_id,
+            name=name,
+            traits=traits, interests=interests, opinions=opinions,
+            ons_male_file=ons_male_file,
+            ons_female_file=ons_female_file)
         self.region_id=region_id
         self.education_id=education_id
         self.ethnicity_id=ethnicity_id

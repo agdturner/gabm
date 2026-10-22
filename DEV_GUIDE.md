@@ -160,6 +160,19 @@ Recommended pattern:
 - Keep tests in `tests/src/gabm/examples/<example_name>/test_sim.py`.
 - Expose a callable (for example `run(...)`) from the source simulation module so tests can execute it directly.
 
+### Person Naming in Examples
+
+`Person` has name state and assignment logic:
+- You can pass `name` directly when constructing a `Person`.
+- If `name` is omitted, `Person` auto-assigns a name from ONS male/female CSV tables using age (year of birth) and gender.
+- Getter/setter methods are available via `get_name()` and `set_name()`.
+
+For chat examples and similar simulations, prefer wiring naming through model creation rather than assigning names in the example script:
+- Pass ONS file overrides into environment-level person creation (`create_random_people(..., ons_male_file=..., ons_female_file=...)`).
+- Read names from person instances (`person.get_name()`) in prompts/transcripts.
+
+Default ONS input paths are expected under `data/input/abm/`.
+
 Reproducibility requirements for simulation tests:
 - Prefer deterministic behavior by explicitly setting random seeds.
 - Avoid hidden randomness from global state; use local RNG objects where practical.
@@ -263,6 +276,7 @@ For maintainability, all Makefile targets that depend on other build steps shoul
 | `make bump-version` | Bump the project version everywhere (patch by default; use `make bump-version part=minor` or `part=major` for other bumps). Uses bump2version and updates all relevant files. |
 | `make run-local` | Run gabm using local source (PYTHONPATH=src) |
 | `make run-installed` | Run gabm using installed package |
+| `make run-example-chat` | Run the chat example simulation with ONS-backed names from `data/input/abm/` |
 
 
 All Python scripts used by Makefile targets are in the `scripts/` directory and are named consistently with their Makefile targets (e.g., `make docs-clean` runs `scripts/docs-clean.py`).
@@ -277,7 +291,7 @@ Please refer to the Makefile for full details.
 Markdown files in the root directory, each serving a specific purpose:
   - [README.md](README.md): A general [README](https://en.wikipedia.org/wiki/README) that links to much of the documentation outlined below including the developer and user guides. It is included in the Sphinx documentation and forms the basis for the main Sphinx documentation page.
   - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md): Provides details on expected behavior of developers and reporting procedures.
-  - [USER_GUIDE.md](USER_GUIDE.md): Provides step-by-step instructions for users to get set, and should provide guidance for using GABM.
+  - [USER_GUIDE.md](USER_GUIDE.md): Provides step-by-step instructions for users to get set up, and should provide guidance for using GABM.
   - [DEV_QUICKSTART.md](DEV_QUICKSTART.md) Provides step-by-step instructions for developers to get set up for contributing to GABM development.
   - [DEV_GUIDE.md](DEV_GUIDE.md): Explains how to contribute to GABM as a developer. It provides details about project structure, and workflow guidance.
   - [API_KEYS.md](API_KEYS.md): Explains how to create a file containing API keys for communicating with LLMs.
@@ -361,7 +375,7 @@ The following files and directories are essential for building, testing, and dis
 - `.github/workflows/test.yml` automatically runs `make test` on PRs to the main branch.
 - `.github/workflows/gh-pages-deploy.yml` builds documentation for the gh-pages branch and is for automated docs deployment.
 
-PRs to the [GAB Repository main branch](https://github.com/compolis/GABM/tree/main) must pass the test workflow before merging.
+PRs to the [GABM Repository main branch](https://github.com/compolis/GABM/tree/main) must pass the test workflow before merging.
 
 The gh-pages branch is protected from deletion.
 
@@ -438,7 +452,7 @@ For more details, see the comments in the Makefile and the deployment script.
 
 ## GitHub Copilot
 
-Using [GitHub Copilot](https://github.com/features/copilot)) for [vibe coding](https://en.wikipedia.org/wiki/Vibe_coding), can help with understanding workflows and developing documentation, code and tests.
+Using [GitHub Copilot](https://github.com/features/copilot) for [vibe coding](https://en.wikipedia.org/wiki/Vibe_coding), can help with understanding workflows and developing documentation, code and tests.
 
 GitHub Copilot uses limited context and the chat context does not currently persist between sessions. As a result, it is good to develop/update documentation along with changes. GitHub Copilot can be asked to read the [README](README.md) and [Developer Guide](DEV_GUIDE.md) at the start of a session so as to be more context aware and provide better support.
 
@@ -504,5 +518,5 @@ class MyLLMService(LLMService):
 
 ## Additional Resources
 
-- [Apertus LLM Setup and Usage](Apertus.md) — for details on obtaining and using local Apertus LLM models
+- [HUGGING_FACE.md](HUGGING_FACE.md) — for details on obtaining and using local Apertus and other Hugging Face models
 

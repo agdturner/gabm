@@ -10,6 +10,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 # Standard library imports
 import pytest
 from unittest.mock import Mock
+from pathlib import Path
 # Local imports
 from gabm.abm.environment import Environment, Nation
 from gabm.abm.agent import AgentID, Agent, PersonID, Person, CitizenID, Citizen
@@ -90,6 +91,61 @@ def test_person_age_and_gender():
     # get_self_description
     desc = person.get_self_description()
     assert "years old" in desc
+
+
+def test_person_name_set_get_with_explicit_name():
+    """Test explicit name is preserved and can be updated via setter/getter."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(PersonID(10), environment=environment, year_of_birth=1995, gender_id=GenderID.FEMALE, name="Ari")
+
+    assert person.get_name() == "Ari"
+
+    person.set_name("Jordan")
+    assert person.get_name() == "Jordan"
+
+
+def test_person_set_name_rejects_empty_or_none():
+    """Test name setter validates empty and None values."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(PersonID(11), environment=environment, year_of_birth=1990, gender_id=GenderID.MALE, name="Alex")
+
+    with pytest.raises(ValueError):
+        person.set_name("")
+
+    with pytest.raises(ValueError):
+        person.set_name(None)
+
+
+def test_person_auto_assigns_name_from_ons_when_missing(tmp_path):
+    """Test automatic name assignment uses ONS files and person demographics."""
+    male_csv = tmp_path / "male.csv"
+    female_csv = tmp_path / "female.csv"
+
+    male_csv.write_text(
+        "Name,Alex,Sam\n"
+        "1990,1,2\n"
+        "2000,2,1\n",
+        encoding="utf-8",
+    )
+    female_csv.write_text(
+        "Name,Ava,Ella\n"
+        "1990,2,1\n"
+        "2000,1,2\n",
+        encoding="utf-8",
+    )
+
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(12),
+        environment=environment,
+        year_of_birth=2000,
+        gender_id=GenderID.FEMALE,
+        name=None,
+        ons_male_file=Path(male_csv),
+        ons_female_file=Path(female_csv),
+    )
+
+    assert person.get_name() in {"Ava", "Ella"}
 
 # --- Citizen Tests ---
 def test_citizen_creation():
