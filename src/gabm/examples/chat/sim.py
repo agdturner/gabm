@@ -1,7 +1,16 @@
-"""Chat simulation example module."""
+"""
+Chat simulation example module.
+This module provides a simulation of a conversation between two person agents, optionally using a large language model (LLM) service for dialogue generation.
+The simulation can be run from the command line, and it generates output artifacts including a conversation transcript, console output, and metadata about the run.
+"""
+# Metadata
+__author__ = ["Andy Turner <agdturner@gmail.com>"]
+__version__ = "0.1.0"
+__copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 import argparse
 import importlib
+import itertools
 import json
 import os
 import random
@@ -81,6 +90,26 @@ def parse_cli_args(argv: list[str] | None = None) -> argparse.Namespace:
 		"--no-cache",
 		action="store_true",
 		help="Disable LLM cache replay and force live prompting on every request.",
+	)
+	parser.add_argument(
+		"--conversation-mode",
+		type=str,
+		choices=["normal", "awkward"],
+		default="normal",
+		help="Conversation style: normal (shared-interest seeking) or awkward (slower alignment).",
+	)
+	parser.add_argument(
+		"--pairing-strategy",
+		type=str,
+		choices=["random", "max_dissimilarity"],
+		default="random",
+		help="How to choose the two participants: random or max_dissimilarity from a candidate pool.",
+	)
+	parser.add_argument(
+		"--candidate-pool-size",
+		type=int,
+		default=8,
+		help="Candidate pool size used when pairing-strategy=max_dissimilarity.",
 	)
 	return parser.parse_args(argv)
 
@@ -180,8 +209,21 @@ def build_first_turn_prompt(
 	speaker_interests: str,
 	speaker_values: str,
 	other_persona: str,
+	conversation_mode: str = "normal",
 ) -> str:
 	"""Build the first-turn prompt for the conversation LLM."""
+	if conversation_mode == "awkward":
+		return (
+			"You are helping simulate a realistic first conversation between two person agents.\n"
+			"Goal: keep the exchange plausible but a little awkward, with uncertainty and no forced rapport.\n"
+			f"You are Speaker: {speaker_name}\n"
+			f"About you: {speaker_persona} {speaker_interests} {speaker_values}\n"
+			f"Other person: {other_name}. {other_persona}\n"
+			"Conversation so far: none\n"
+			"Write one short line that Speaker would say first. Be polite but reserved. "
+			"Do not actively search for shared interests in the first two rounds. "
+			"Do not prefix the line with the speaker's name."
+		)
 	return (
 		"You are helping simulate a conversation between two person agents.\n"
 		"Goal: find shared interests through a natural, friendly conversation.\n"
@@ -203,9 +245,27 @@ def build_follow_up_prompt(
 	speaker_values: str,
 	other_persona: str,
 	history_lines: list[str],
+	conversation_mode: str = "normal",
+	round_num: int = 2,
 ) -> str:
 	"""Build a follow-up turn prompt using conversation history."""
 	history_text = "\n".join(history_lines) if history_lines else "none"
+	if conversation_mode == "awkward":
+		round_guidance = (
+			"Do not actively search for shared interests yet."
+			if round_num <= 2
+			else "You may cautiously explore common ground if it arises naturally."
+		)
+		return (
+			"You are helping simulate a realistic first conversation between two person agents.\n"
+			"Goal: keep the exchange plausible but somewhat awkward and uneven.\n"
+			f"You are Speaker: {speaker_name}\n"
+			f"About you: {speaker_persona} {speaker_interests} {speaker_values}\n"
+			f"Other person: {other_name}. {other_persona}\n"
+			f"Conversation so far:\n{history_text}\n"
+			f"Write one short reply for Speaker. {round_guidance} "
+			"Do not prefix the line with the speaker's name."
+		)
 	return (
 		"You are helping simulate a conversation between two person agents.\n"
 		"Goal: keep the conversation natural while trying to find shared interests.\n"
@@ -298,6 +358,64 @@ def _fallback_turn_line(rng: random.Random, round_num: int, speaker_name: str, o
 	return rng.choice(options)
 
 
+def _extract_topic_tokens(summary: str) -> set[str]:
+	"""Extract lightweight topic tokens from interests summary text."""
+	cleaned = summary.lower().replace(".", " ").replace(",", " ")
+	stop_words = {
+		"i", "am", "interested", "in", "and", "not", "have", "no", "currently", "don", "t", "what", "my"
+	}
+	return {token for token in cleaned.split() if len(token) > 2 and token not in stop_words}
+
+
+def _compute_pair_similarity(person_a, person_b, shared_interest_score: float) -> dict:
+	"""Compute coarse pair similarity and dissimilarity scores."""
+	age_a = person_a.get_age()
+	age_b = person_b.get_age()
+	if age_a is None or age_b is None:
+		age_similarity = 0.5
+	else:
+		age_similarity = max(0.0, 1.0 - min(40.0, abs(age_a - age_b)) / 40.0)
+
+	gender_a = person_a.get_gender().strip().lower()
+	gender_b = person_b.get_gender().strip().lower()
+	if gender_a in {"none", "unknown"} or gender_b in {"none", "unknown"}:
+		gender_similarity = 0.5
+	else:
+		gender_similarity = 1.0 if gender_a == gender_b else 0.0
+
+	interest_similarity = max(0.0, min(1.0, shared_interest_score))
+	similarity_score = (0.40 * interest_similarity) + (0.35 * age_similarity) + (0.25 * gender_similarity)
+	dissimilarity_score = 1.0 - similarity_score
+	return {
+		"similarity_score": round(similarity_score, 4),
+		"dissimilarity_score": round(dissimilarity_score, 4),
+	}
+
+
+def _pair_shared_interest_score(person_a, person_b) -> float:
+	tokens_a = _extract_topic_tokens(person_a.get_interests_summary())
+	tokens_b = _extract_topic_tokens(person_b.get_interests_summary())
+	if not tokens_a and not tokens_b:
+		return 0.0
+	return len(tokens_a & tokens_b) / max(1, len(tokens_a | tokens_b))
+
+
+def _select_pair_by_dissimilarity(candidates: list):
+	"""Select the most dissimilar pair from candidate people."""
+	best_pair = None
+	best_score = -1.0
+	for person_a, person_b in itertools.combinations(candidates, 2):
+		shared_score = _pair_shared_interest_score(person_a, person_b)
+		pair_metrics = _compute_pair_similarity(person_a, person_b, shared_score)
+		score = pair_metrics["dissimilarity_score"]
+		if score > best_score:
+			best_pair = (person_a, person_b)
+			best_score = score
+	if best_pair is None:
+		raise ValueError("Unable to select participant pair from candidate pool")
+	return best_pair[0], best_pair[1]
+
+
 def _build_run_dir_name(seed: int, llm_service_name: str | None, run_id: str | None = None) -> str:
 	"""Build a stable directory name for this simulation run."""
 	if run_id:
@@ -370,6 +488,10 @@ def run(
 	ons_female_file: Path | None = None,
 	output_root: Path | None = None,
 	run_id: str | None = None,
+	emit_console_output: bool = True,
+	conversation_mode: str = "normal",
+	pairing_strategy: str = "random",
+	candidate_pool_size: int = 8,
 ):
 	"""
 	Run the simulation and write transcript output.
@@ -417,34 +539,46 @@ def run(
 	cache_line_count_before = _jsonl_line_count(cache_jsonl_path)
 
 	def emit(line: str):
-		print(line)
+		if emit_console_output:
+			print(line)
 		console_lines.append(line)
 
 	# 1. Create environment
 	env = Environment(year=year)
 
+	if candidate_pool_size < 2:
+		raise ValueError("candidate_pool_size must be >= 2")
+
 	# 2. Create people
+	candidate_count = 2 if pairing_strategy == "random" else candidate_pool_size
 	people = env.create_random_people(
-		count=2,
+		count=candidate_count,
 		start_person_id=1,
 		seed=seed,
 		with_interests=True,
 		ons_male_file=ons_male_file or _DEFAULT_ONS_MALE_FILE,
 		ons_female_file=ons_female_file or _DEFAULT_ONS_FEMALE_FILE,
 	)
-	name_1, name_2 = people[0].get_name(), people[1].get_name()
+
+	if pairing_strategy == "max_dissimilarity":
+		first_candidate, second_candidate = _select_pair_by_dissimilarity(people)
+		selected_people = [first_candidate, second_candidate]
+	else:
+		selected_people = [people[0], people[1]]
+
+	name_1, name_2 = selected_people[0].get_name(), selected_people[1].get_name()
 
 	# 3. Randomly select a person to start the chat.
-	first_speaker_index = rng.randint(0, len(people) - 1)
-	second_speaker_index = (first_speaker_index + 1) % len(people)
+	first_speaker_index = rng.randint(0, len(selected_people) - 1)
+	second_speaker_index = (first_speaker_index + 1) % len(selected_people)
 
 	# 4. Instigate a conversation between the people using an LLM Service.
 	# Get the first and second speaker objects
 	# First speaker
-	first_speaker = people[first_speaker_index]
+	first_speaker = selected_people[first_speaker_index]
 	first_speaker_name = name_1 if first_speaker_index == 0 else name_2
 	emit(str(first_speaker))
-	first_speaker_persona = first_speaker.get_persona()
+	first_speaker_persona = first_speaker.get_self_description()
 	emit(first_speaker_persona)
 	first_speaker_interests = first_speaker.get_interests_summary()
 	emit(first_speaker_interests)
@@ -452,10 +586,10 @@ def run(
 	emit(first_speaker_values)
 
 	# Second speaker
-	second_speaker = people[second_speaker_index]
+	second_speaker = selected_people[second_speaker_index]
 	second_speaker_name = name_1 if second_speaker_index == 0 else name_2
 	emit(str(second_speaker))
-	second_speaker_persona = second_speaker.get_persona()
+	second_speaker_persona = second_speaker.get_self_description()
 	emit(second_speaker_persona)
 	second_speaker_interests = second_speaker.get_interests_summary()
 	emit(second_speaker_interests)
@@ -463,11 +597,23 @@ def run(
 	emit(second_speaker_values)
 	emit(f"Participants: {first_speaker_name} and {second_speaker_name}")
 
+	tokens_first = _extract_topic_tokens(first_speaker_interests)
+	tokens_second = _extract_topic_tokens(second_speaker_interests)
+	shared_interest_score = 0.0
+	if tokens_first or tokens_second:
+		shared_interest_score = len(tokens_first & tokens_second) / max(1, len(tokens_first | tokens_second))
+	pair_metrics = _compute_pair_similarity(first_speaker, second_speaker, shared_interest_score)
+
 	# Simulate a conversation between the two speakers with a fixed number of rounds.
 	num_rounds = 4
 	history_lines: list[str] = []
 	request_options = {"seed": llm_seed} if llm_seed is not None else None
 	openai_system_fingerprints: set[str] = set()
+	first_shared_interest_round = None
+	awkward_marker_count = 0
+	disagreement_marker_count = 0
+	awkward_markers = ["awkward", "uh", "hmm", "not sure", "anyway", "right", "fine"]
+	disagreement_markers = ["disagree", "not really", "different", "not my thing", "don't think", "however"]
 	for round_num in range(1, num_rounds + 1):
 		speaker, other = (
 			(first_speaker, second_speaker) if round_num % 2 == 1 else (second_speaker, first_speaker)
@@ -475,10 +621,10 @@ def run(
 		speaker_name, other_name = (
 			(first_speaker_name, second_speaker_name) if round_num % 2 == 1 else (second_speaker_name, first_speaker_name)
 		)
-		speaker_persona = speaker.get_persona()
+		speaker_persona = speaker.get_self_description()
 		speaker_interests = speaker.get_interests_summary()
 		speaker_values = speaker.get_values_summary()
-		other_persona = other.get_persona()
+		other_persona = other.get_self_description()
 
 		utterance = ""
 		if llm_service is not None and api_key:
@@ -490,6 +636,7 @@ def run(
 					speaker_interests=speaker_interests,
 					speaker_values=speaker_values,
 					other_persona=other_persona,
+					conversation_mode=conversation_mode,
 				)
 			else:
 				prompt = build_follow_up_prompt(
@@ -500,6 +647,8 @@ def run(
 					speaker_values=speaker_values,
 					other_persona=other_persona,
 					history_lines=history_lines,
+					conversation_mode=conversation_mode,
+					round_num=round_num,
 				)
 			response = llm_service.send(api_key, prompt, model=model, request_options=request_options)
 			utterance = _extract_text_from_llm_response(response)
@@ -508,9 +657,27 @@ def run(
 				openai_system_fingerprints.add(fingerprint)
 
 		if not utterance:
-			utterance = _fallback_turn_line(rng, round_num, speaker_name, other_name)
+			if conversation_mode == "awkward":
+				if round_num == 1:
+					utterance = f"Hi {other_name}. I'm {speaker_name}."
+				else:
+					utterance = rng.choice(
+						[
+							"I see. I'm not sure what to add yet.",
+							"That's different from what I usually do.",
+							"Hmm, fair enough. I suppose that works for you.",
+						]
+					)
+			else:
+				utterance = _fallback_turn_line(rng, round_num, speaker_name, other_name)
 
 		utterance = _normalize_utterance(speaker_name, utterance)
+		utterance_lower = utterance.lower()
+		if first_shared_interest_round is None:
+			if any(marker in utterance_lower for marker in ["same", "also", "too", "both", "common", "me too"]):
+				first_shared_interest_round = round_num
+		awkward_marker_count += sum(1 for marker in awkward_markers if marker in utterance_lower)
+		disagreement_marker_count += sum(1 for marker in disagreement_markers if marker in utterance_lower)
 
 		line = f"Round {round_num}: {speaker_name}: {utterance}"
 		emit(line)
@@ -524,10 +691,19 @@ def run(
 		"llm_seed": llm_seed,
 		"cache_enabled": None if llm_service is None else bool(getattr(llm_service, "use_cache", True)),
 		"model": model,
+		"conversation_mode": conversation_mode,
+		"pairing_strategy": pairing_strategy,
+		"candidate_pool_size": candidate_count,
 		"openai_system_fingerprints": sorted(openai_system_fingerprints),
 		"ons_male_file": str(ons_male_file or _DEFAULT_ONS_MALE_FILE),
 		"ons_female_file": str(ons_female_file or _DEFAULT_ONS_FEMALE_FILE),
 		"participants": [first_speaker_name, second_speaker_name],
+		"shared_interest_score": round(shared_interest_score, 4),
+		"pair_similarity_score": pair_metrics["similarity_score"],
+		"pair_dissimilarity_score": pair_metrics["dissimilarity_score"],
+		"first_shared_interest_round": first_shared_interest_round,
+		"awkward_marker_count": awkward_marker_count,
+		"disagreement_marker_count": disagreement_marker_count,
 		"run_dir": str(run_dir),
 		"cache_jsonl_path": str(cache_jsonl_path) if cache_jsonl_path is not None else None,
 		"cache_delta_line_count": len(cache_delta_lines),
@@ -563,4 +739,7 @@ if __name__ == "__main__":
 		ons_female_file=resolve_ons_female_file(args.ons_female_file),
 		output_root=args.output_root,
 		run_id=args.run_id,
+		conversation_mode=args.conversation_mode,
+		pairing_strategy=args.pairing_strategy,
+		candidate_pool_size=args.candidate_pool_size,
 	)

@@ -93,6 +93,155 @@ def test_person_age_and_gender():
     assert "years old" in desc
 
 
+def test_person_age_range_initialization_and_midpoint_age():
+    """Age range input should infer a deterministic midpoint age and birth year."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+
+    person = Person(
+        PersonID(50),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.FEMALE,
+        age_min=30,
+        age_max=34,
+    )
+
+    assert person.age_min == 30
+    assert person.age_max == 34
+    assert person.get_age() == 32
+    assert person.year_of_birth == 1994
+
+
+def test_person_explicit_age_sets_birth_year_and_bounds():
+    """Exact age input should set year_of_birth and age bounds consistently."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+
+    person = Person(
+        PersonID(51),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.MALE,
+        age=40,
+    )
+
+    assert person.get_age() == 40
+    assert person.year_of_birth == 1986
+    assert person.age_min == 40
+    assert person.age_max == 40
+
+
+def test_person_date_of_birth_sets_age_and_year():
+    """date_of_birth should populate year_of_birth and age information."""
+    from datetime import date
+
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(52),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.FEMALE,
+        date_of_birth=date(2000, 5, 20),
+    )
+
+    assert person.year_of_birth == 2000
+    assert person.get_age() == 26
+    assert person.age_min == 26
+    assert person.age_max == 26
+
+
+def test_person_rejects_invalid_age_inputs():
+    """Invalid age combinations should raise ValueError."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+
+    with pytest.raises(ValueError):
+        Person(PersonID(53), environment=environment, year_of_birth=None, gender_id=None, age=-1)
+
+    with pytest.raises(ValueError):
+        Person(PersonID(54), environment=environment, year_of_birth=None, gender_id=None, age_min=40, age_max=30)
+
+    with pytest.raises(ValueError):
+        Person(
+            PersonID(55),
+            environment=environment,
+            year_of_birth=1990,
+            gender_id=None,
+            age=20,
+        )
+
+
+def test_person_age_helpers_for_exact_age():
+    """Exact-age person should report exact age semantics and no birthday tuple."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(56),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.MALE,
+        age=27,
+    )
+
+    assert person.has_exact_age() is True
+    assert person.get_age_range() == (27, 27)
+    assert person.get_birthday_month_day() is None
+
+
+def test_person_age_helpers_for_age_range():
+    """Age-range person should report non-exact age semantics."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(57),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.FEMALE,
+        age_min=18,
+        age_max=24,
+    )
+
+    assert person.has_exact_age() is False
+    assert person.get_age_range() == (18, 24)
+    assert person.get_birthday_month_day() is None
+    assert "between 18 and 24 years old" in person.get_self_description()
+
+
+def test_person_age_helpers_for_date_of_birth():
+    """date_of_birth person should expose month/day for anniversary simulations."""
+    from datetime import date
+
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(58),
+        environment=environment,
+        year_of_birth=None,
+        gender_id=GenderID.FEMALE,
+        date_of_birth=date(1992, 11, 3),
+    )
+
+    assert person.has_exact_age() is True
+    assert person.get_age_range() == (34, 34)
+    assert person.get_birthday_month_day() == (11, 3)
+    assert person.is_birthday(11, 3) is True
+    assert person.is_birthday(11, 4) is False
+
+
+def test_person_is_birthday_without_dob_is_false_and_invalid_date_raises():
+    """Birthday helper should be safe without DOB and validate obvious bad input."""
+    environment = Environment(2026, name="Earth", gender_map=GenderMap())
+    person = Person(
+        PersonID(59),
+        environment=environment,
+        year_of_birth=2000,
+        gender_id=GenderID.FEMALE,
+    )
+
+    assert person.is_birthday(1, 1) is False
+
+    with pytest.raises(ValueError):
+        person.is_birthday(0, 1)
+
+    with pytest.raises(ValueError):
+        person.is_birthday(1, 0)
+
+
 def test_person_name_set_get_with_explicit_name():
     """Test explicit name is preserved and can be updated via setter/getter."""
     environment = Environment(2026, name="Earth", gender_map=GenderMap())

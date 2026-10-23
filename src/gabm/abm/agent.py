@@ -20,6 +20,7 @@ import logging
 import random
 from types import MappingProxyType
 from pathlib import Path
+from datetime import date
 # Local imports
 from gabm.core.id import GABMID
 from gabm.abm.attributes.gender import GenderID
@@ -236,6 +237,10 @@ class Person(Agent):
 
     def __init__(self, person_id: PersonID, environment: Environment,
         year_of_birth: int, gender_id: GenderID,
+        age: int = None,
+        age_min: int = None,
+        age_max: int = None,
+        date_of_birth: date = None,
         name: str = None,
         traits: dict[TraitTopicID, 'Trait'] = None,
         interests: dict[InterestTopicID, 'Interest'] = None,
@@ -253,6 +258,10 @@ class Person(Agent):
             person_id: Unique identifier for the Person instance.
             environment: The Environment the Person instance belongs to.
             year_of_birth: The year the person was born.
+            age: Optional exact age in years.
+            age_min: Optional minimum age in years.
+            age_max: Optional maximum age in years.
+            date_of_birth: Optional full birth date.
             gender_id: The GenderID attributed.
             name: Optional display name for the person. If not provided, auto-assigned from ONS tables.
             traits: A dictionary of traits, where keys are TraitTopicIDs and values are Trait objects.interests: A dictionary of interests, where keys are InterestTopicIDs and values are Interest objects.
@@ -289,17 +298,14 @@ class Person(Agent):
             except TypeError:
                 # If gender_map is a Mock or not iterable, skip this check
                 pass
-        if year_of_birth is None:
-            self.year_of_birth = self.environment.year - 18
-        else:
-            self.year_of_birth = year_of_birth
-            """
-            If year_of_birth is greater than the current year set year 
-            of birth to be the current year from the environment.
-            """
-            if self.year_of_birth > self.environment.year:
-                logging.warning(f"year_of_birth ({self.year_of_birth}) cannot be greater than the current year ({self.environment.year}). Setting year_of_birth to {self.environment.year}.")
-                self.year_of_birth = self.environment.year
+        self.date_of_birth = date_of_birth
+        self.year_of_birth, self.age_min, self.age_max = self._resolve_birth_and_age_inputs(
+            year_of_birth=year_of_birth,
+            age=age,
+            age_min=age_min,
+            age_max=age_max,
+            date_of_birth=date_of_birth,
+        )
         if self.get_age() > 200:
             logging.warning(f"Age ({self.get_age()}) is unusually high.")
 
@@ -339,6 +345,68 @@ class Person(Agent):
                 overwrite=True,
             )
         self._initialize_trait_state(traits)
+
+    def _resolve_birth_and_age_inputs(
+        self,
+        year_of_birth: int | None,
+        age: int | None,
+        age_min: int | None,
+        age_max: int | None,
+        date_of_birth: date | None,
+    ) -> tuple[int, int, int]:
+        """Resolve supported age representations into canonical year + min/max age."""
+        has_year = year_of_birth is not None
+        has_age = age is not None
+        has_range = age_min is not None or age_max is not None
+        has_dob = date_of_birth is not None
+
+        mode_count = sum([has_year, has_age, has_range, has_dob])
+        if mode_count > 1:
+            raise ValueError("Specify only one of year_of_birth, age, age range, or date_of_birth.")
+
+        if has_dob:
+            if not isinstance(date_of_birth, date):
+                raise TypeError("date_of_birth must be a datetime.date instance.")
+            resolved_age = self.environment.year - date_of_birth.year
+            if resolved_age < 0:
+                raise ValueError("date_of_birth cannot be in the future relative to environment year.")
+            return date_of_birth.year, resolved_age, resolved_age
+
+        if has_age:
+            if age < 0:
+                raise ValueError("age must be >= 0")
+            resolved_year = self.environment.year - age
+            return resolved_year, age, age
+
+        if has_range:
+            if age_min is None or age_max is None:
+                raise ValueError("Both age_min and age_max must be provided when using an age range.")
+            if age_min < 0 or age_max < 0:
+                raise ValueError("age_min and age_max must be >= 0")
+            if age_min > age_max:
+                raise ValueError("age_min must be <= age_max")
+            midpoint_age = (age_min + age_max) // 2
+            resolved_year = self.environment.year - midpoint_age
+            return resolved_year, age_min, age_max
+
+        if not has_year:
+            default_age = 18
+            return self.environment.year - default_age, default_age, default_age
+
+        resolved_year = year_of_birth
+        if resolved_year > self.environment.year:
+            logging.warning(
+                "year_of_birth (%s) cannot be greater than the current year (%s). "
+                "Setting year_of_birth to %s.",
+                resolved_year,
+                self.environment.year,
+                self.environment.year,
+            )
+            resolved_year = self.environment.year
+        resolved_age = self.environment.year - resolved_year
+        if resolved_age < 0:
+            resolved_age = 0
+        return resolved_year, resolved_age, resolved_age
 
     @classmethod
     def _load_ons_table_cached(cls, csv_path: Path):
@@ -398,6 +466,10 @@ class Person(Agent):
         environment: Environment,
         year_of_birth: int,
         gender_id: GenderID,
+        age: int = None,
+        age_min: int = None,
+        age_max: int = None,
+        date_of_birth: date = None,
         name: str = None,
         ons_male_file: Path = None,
         ons_female_file: Path = None,
@@ -419,6 +491,10 @@ class Person(Agent):
             environment: Simulation environment.
             year_of_birth: Person year of birth.
             gender_id: Person gender identifier.
+            age: Optional exact age in years.
+            age_min: Optional minimum age in years.
+            age_max: Optional maximum age in years.
+            date_of_birth: Optional full birth date.
             name: Optional display name for the person.
             ons_male_file: Optional path to ONS male names CSV for auto-assignment.
             ons_female_file: Optional path to ONS female names CSV for auto-assignment.
@@ -445,6 +521,10 @@ class Person(Agent):
             environment=environment,
             year_of_birth=year_of_birth,
             gender_id=gender_id,
+            age=age,
+            age_min=age_min,
+            age_max=age_max,
+            date_of_birth=date_of_birth,
             name=name,
             ons_male_file=ons_male_file,
             ons_female_file=ons_female_file,
@@ -527,6 +607,49 @@ class Person(Agent):
         if self.year_of_birth is None:
             return None
         return self.environment.year - self.year_of_birth
+
+    def get_age_range(self) -> tuple[int, int]:
+        """
+        Get the person's age bounds in years.
+
+        Return:
+            A tuple of (age_min, age_max).
+        """
+        return (self.age_min, self.age_max)
+
+    def has_exact_age(self) -> bool:
+        """
+        Return whether this person has an exact known age.
+        """
+        return self.age_min == self.age_max
+
+    def get_birthday_month_day(self) -> tuple[int, int] | None:
+        """
+        Get birthday month/day when a full date_of_birth is known.
+
+        Return:
+            (month, day) or None if no full date_of_birth is available.
+        """
+        if self.date_of_birth is None:
+            return None
+        return (self.date_of_birth.month, self.date_of_birth.day)
+
+    def is_birthday(self, month: int, day: int) -> bool:
+        """
+        Return True when the given month/day matches this person's birthday.
+
+        Args:
+            month: Calendar month (1-12).
+            day: Calendar day (1-31, validated against known date_of_birth).
+        """
+        if month < 1 or month > 12:
+            raise ValueError("month must be in 1..12")
+        if day < 1 or day > 31:
+            raise ValueError("day must be in 1..31")
+        birthday = self.get_birthday_month_day()
+        if birthday is None:
+            return False
+        return birthday == (month, day)
 
     def get_gender(self) -> str:
         """
@@ -974,8 +1097,11 @@ class Person(Agent):
         Return:
             A string describing the person.
         """
-        age = self.get_age()
-        desc = f"I am {age} years old. "
+        if self.has_exact_age():
+            age = self.get_age()
+            desc = f"I am {age} years old. "
+        else:
+            desc = f"I am between {self.age_min} and {self.age_max} years old. "
         if self.gender_id is not None:
             desc += f"I am {self.get_gender()}. "
         if getattr(self, "name", None):
@@ -1036,11 +1162,7 @@ class Person(Agent):
         """
         Compile and return a persona as a string based on demographics and values.
         """
-        sn = self.environment
-        age = self.get_age()
-        gender = sn.gender_map.get(self.gender_id).description
-        r: str = f"I am a {age} year old {gender}."
-        return r
+        return self.get_self_description().strip()
     
     def get_interests_summary(self) -> str:
         """
@@ -1174,6 +1296,10 @@ class Citizen(Person):
     """
     def __init__(self, citizen_id: CitizenID, nation: Nation,
         year_of_birth: int = None,
+        age: int = None,
+        age_min: int = None,
+        age_max: int = None,
+        date_of_birth: date = None,
         gender_id: GenderID = None,
         name: str = None,
         traits: dict = None,
@@ -1196,6 +1322,14 @@ class Citizen(Person):
                 The Nation the citizen belongs to.
             year_of_birth (int):
                 Year of birth.
+            age (int):
+                Optional exact age in years.
+            age_min (int):
+                Optional minimum age in years.
+            age_max (int):
+                Optional maximum age in years.
+            date_of_birth (date):
+                Optional full birth date.
             gender_id (GenderID):
                 The ID of the gender attributed.
             name (str):
@@ -1223,6 +1357,7 @@ class Citizen(Person):
         """
         super().__init__(person_id=citizen_id, environment=nation,
             year_of_birth=year_of_birth, gender_id=gender_id,
+            age=age, age_min=age_min, age_max=age_max, date_of_birth=date_of_birth,
             name=name,
             traits=traits, interests=interests, opinions=opinions,
             ons_male_file=ons_male_file,

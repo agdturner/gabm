@@ -9,6 +9,7 @@ __copyright__ = "Copyright (c) 2026 GABM contributors, University of Leeds"
 
 # Standard library imports
 import pytest
+from datetime import date
 # Local imports
 from gabm.abm.environment import Environment, Nation
 from gabm.abm.agent import AgentID, Agent, Person
@@ -94,3 +95,52 @@ def test_environment_create_random_people_registers_agents():
     assert all(isinstance(person, Person) for person in people)
     assert [person.id.id for person in people] == [100, 101, 102]
     assert all(len(person.interests) == 0 for person in people)
+
+
+def test_environment_create_random_people_with_age_range():
+    """Random person creation should support explicit sampled age ranges."""
+    env = Environment(year=2026)
+
+    people = env.create_random_people(
+        count=5,
+        start_person_id=1,
+        seed=17,
+        with_interests=False,
+        age_min=20,
+        age_max=24,
+    )
+
+    assert len(people) == 5
+    for person in people:
+        assert 20 <= person.get_age() <= 24
+        assert person.age_min == person.get_age()
+        assert person.age_max == person.get_age()
+
+
+def test_environment_current_date_defaults_to_start_of_year():
+    """Environment should initialize a calendar date for sub-year simulations."""
+    env = Environment(year=2026)
+
+    assert env.current_date == date(2026, 1, 1)
+    assert env.year == 2026
+
+
+def test_environment_advance_day_emits_birthday_events():
+    """Daily stepping should detect birthdays and support callback hooks."""
+    env = Environment(year=2026, current_date=date(2026, 11, 2))
+    person = Person(person_id=1, environment=env, year_of_birth=None, gender_id=None, date_of_birth=date(1992, 11, 3))
+    env.agents_active[person.id] = person
+
+    callback_events = []
+
+    def on_birthday(p, d):
+        callback_events.append((p.id.id, d.isoformat()))
+
+    events = env.advance_day(days=2, birthday_callback=on_birthday)
+
+    assert env.current_date == date(2026, 11, 4)
+    assert env.year == 2026
+    assert len(events) == 1
+    assert events[0][0] == person
+    assert events[0][1] == date(2026, 11, 3)
+    assert callback_events == [(1, "2026-11-03")]

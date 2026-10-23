@@ -102,7 +102,7 @@ def test_chat_sim_runs_and_prints_expected_sections(capsys):
     lines = [line for line in captured.out.splitlines() if line.strip()]
 
     assert len(lines) >= 8
-    assert any("year old" in line for line in lines)
+    assert any("years old" in line for line in lines)
     assert any("I am interested in" in line for line in lines)
     assert any("I value " in line for line in lines)
     assert any(line.startswith("Participants:") for line in lines)
@@ -129,6 +129,22 @@ def test_build_first_turn_prompt_includes_goal_and_name_fields():
     assert "Other person: Jordan" in prompt
     assert "introducing yourself or asking the other person's name" in prompt
     assert "Do not prefix the line with the speaker's name" in prompt
+
+
+def test_build_first_turn_prompt_awkward_mode_changes_goal_text():
+    """Awkward mode should produce a less alignment-seeking first-turn prompt."""
+    prompt = build_first_turn_prompt(
+        speaker_name="Alex",
+        other_name="Jordan",
+        speaker_persona="I am a 30 year old person.",
+        speaker_interests="I am interested in music.",
+        speaker_values="I value kindness.",
+        other_persona="I am a 35 year old person.",
+        conversation_mode="awkward",
+    )
+
+    assert "a little awkward" in prompt
+    assert "Do not actively search for shared interests" in prompt
 
 
 def test_normalize_utterance_strips_speaker_prefix():
@@ -406,3 +422,46 @@ def test_chat_metadata_records_system_fingerprint_and_llm_seed(tmp_path):
     metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
     assert metadata["llm_seed"] == 42
     assert metadata["openai_system_fingerprints"] == ["fp_test"]
+
+
+def test_chat_metadata_records_awkward_mode_fields(tmp_path):
+    """Awkward-mode run should record mode and awkwardness metadata fields."""
+    run_dir = run(
+        seed=42,
+        output_root=tmp_path,
+        run_id="awkward-meta",
+        conversation_mode="awkward",
+    )
+
+    import json
+
+    metadata = json.loads((run_dir / "run_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["conversation_mode"] == "awkward"
+    assert "pair_dissimilarity_score" in metadata
+    assert "awkward_marker_count" in metadata
+    assert "disagreement_marker_count" in metadata
+
+
+def test_max_dissimilarity_pairing_increases_pair_dissimilarity(tmp_path):
+    """Max-dissimilarity pairing should not be less dissimilar than random pairing for same seed."""
+    random_dir = run(
+        seed=77,
+        output_root=tmp_path,
+        run_id="pair-random",
+        pairing_strategy="random",
+        candidate_pool_size=8,
+    )
+    max_dir = run(
+        seed=77,
+        output_root=tmp_path,
+        run_id="pair-max",
+        pairing_strategy="max_dissimilarity",
+        candidate_pool_size=8,
+    )
+
+    import json
+
+    random_meta = json.loads((random_dir / "run_metadata.json").read_text(encoding="utf-8"))
+    max_meta = json.loads((max_dir / "run_metadata.json").read_text(encoding="utf-8"))
+
+    assert max_meta["pair_dissimilarity_score"] >= random_meta["pair_dissimilarity_score"]
