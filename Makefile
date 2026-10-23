@@ -26,7 +26,7 @@
 # Caution: Some commands (like git-clean, release, and delete-release) can modify your git history or delete tags. Always review the scripts they call (in the scripts/ directory) to ensure they do what you expect before running these commands.
 
 # Phony targets (not actual files)
-.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches llm-drift-check sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed run-example-chat compare-example-chat
+.PHONY: help test docs docs-clean gh-pages-deploy gh-pages-deploy2 clean git-clean setup-llms clear-caches llm-drift-check sync sync-feature release delete-release build build-test pypi-release testpypi-release bump-version run-local run-installed run-example-chat run-example-chat-ensemble run-example-chat-opinion run-example-chat-opinion-ensemble compare-example-chat compare-ensemble-sweeps
 
 # Show available Makefile commands
 help:
@@ -53,6 +53,10 @@ help:
 	@echo "  run-local        - Run gabm using local source (development mode)"
 	@echo "  run-installed    - Run gabm using installed package (production mode)"
 	@echo "  run-example-chat - Run chat example (usage: make run-example-chat SEED=42 YEAR=2026 ONS_MALE=... ONS_FEMALE=... OUTPUT_ROOT=... RUN_ID=... NO_CACHE=1)"
+	@echo "  run-example-chat-ensemble - Run chat ensemble sweep (usage: make run-example-chat-ensemble START_SEED=100 N_RUNS=25 OUTPUT_ROOT=... RUN_ID=... NO_CACHE=1 LLM_SEED=42)"
+	@echo "  run-example-chat-opinion - Run chat+opinion example (usage: make run-example-chat-opinion SEED=42 YEAR=2026 ROUNDS=8 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 OUTPUT_ROOT=... RUN_ID=... NO_CACHE=1 LLM_SEED=42)"
+	@echo "  run-example-chat-opinion-ensemble - Run ensemble similarity sweep (usage: make run-example-chat-opinion-ensemble START_SEED=100 N_RUNS=25 ROUNDS=8 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 OUTPUT_ROOT=... RUN_ID=... NO_CACHE=1 LLM_SEED=42)"
+	@echo "  compare-ensemble-sweeps - Compare two ensemble sweep directories (usage: make compare-ensemble-sweeps SWEEP_A=<dir> SWEEP_B=<dir> LABEL_A=hosted LABEL_B=hpc OUTPUT_ROOT=... RUN_ID=...)"
 	@echo "  compare-example-chat - Compare two chat run output directories (usage: make compare-example-chat RUN_A=<dir> RUN_B=<dir> [OUTPUT_ROOT=...])"
 	@echo "Use 'make <target>' to run a specific target. For targets that require additional variables (like release and sync-feature), include them as shown in the usage instructions."
 
@@ -223,8 +227,8 @@ run-local:
 run-installed:
 	python3 -m gabm $(ARGS)
 
-# Run chat example with optional ONS file, output root, and run-id overrides
-# Usage: make run-example-chat SEED=42 YEAR=2026 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat RUN_ID=my_run_id NO_CACHE=1 LLM_SEED=42
+# Run chat example with optional ONS file, output root, mode, and run-id overrides
+# Usage: make run-example-chat SEED=42 YEAR=2026 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat RUN_ID=my_run_id NO_CACHE=1 LLM_SEED=42
 run-example-chat:
 	@RUN_ID_ARG=""; \
 	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
@@ -234,7 +238,60 @@ run-example-chat:
 	if [ -n "$$LLM_SEED" ]; then LLM_SEED_ARG=" --llm-seed $$LLM_SEED"; fi; \
 	NO_CACHE_ARG=""; \
 	if [ -n "$$NO_CACHE" ]; then NO_CACHE_ARG=" --no-cache"; fi; \
-	PYTHONPATH=src python3 src/gabm/examples/chat/sim.py --llm-service openai --model gpt-4o-mini --seed $${SEED:-42} --year $${YEAR:-2026} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+	PYTHONPATH=src python3 src/gabm/examples/chat/sim.py --llm-service openai --model gpt-4o-mini --seed $${SEED:-42} --year $${YEAR:-2026} --conversation-mode $${CONVERSATION_MODE:-normal} --pairing-strategy $${PAIRING_STRATEGY:-random} --candidate-pool-size $${CANDIDATE_POOL_SIZE:-8} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+
+# Run simple chat ensemble similarity sweep with optional overrides
+# Usage: make run-example-chat-ensemble START_SEED=100 N_RUNS=25 YEAR=2026 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat/ensembles RUN_ID=my_sweep NO_CACHE=1 LLM_SEED=42
+run-example-chat-ensemble:
+	@RUN_ID_ARG=""; \
+	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
+	OUTPUT_ROOT_ARG=""; \
+	if [ -n "$$OUTPUT_ROOT" ]; then OUTPUT_ROOT_ARG=" --output-root $$OUTPUT_ROOT"; fi; \
+	LLM_SEED_ARG=""; \
+	if [ -n "$$LLM_SEED" ]; then LLM_SEED_ARG=" --llm-seed $$LLM_SEED"; fi; \
+	NO_CACHE_ARG=""; \
+	if [ -n "$$NO_CACHE" ]; then NO_CACHE_ARG=" --no-cache"; fi; \
+	PYTHONPATH=src python3 src/gabm/examples/chat/ensembles/similarity_sweep.py --llm-service openai --model gpt-4o-mini --start-seed $${START_SEED:-100} --n-runs $${N_RUNS:-25} --year $${YEAR:-2026} --conversation-mode $${CONVERSATION_MODE:-normal} --pairing-strategy $${PAIRING_STRATEGY:-random} --candidate-pool-size $${CANDIDATE_POOL_SIZE:-8} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+
+# Run chat+opinion example with optional overrides
+# Usage: make run-example-chat-opinion SEED=42 YEAR=2026 ROUNDS=8 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat_opinion RUN_ID=my_run_id NO_CACHE=1 LLM_SEED=42
+run-example-chat-opinion:
+	@RUN_ID_ARG=""; \
+	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
+	OUTPUT_ROOT_ARG=""; \
+	if [ -n "$$OUTPUT_ROOT" ]; then OUTPUT_ROOT_ARG=" --output-root $$OUTPUT_ROOT"; fi; \
+	LLM_SEED_ARG=""; \
+	if [ -n "$$LLM_SEED" ]; then LLM_SEED_ARG=" --llm-seed $$LLM_SEED"; fi; \
+	NO_CACHE_ARG=""; \
+	if [ -n "$$NO_CACHE" ]; then NO_CACHE_ARG=" --no-cache"; fi; \
+	PYTHONPATH=src python3 src/gabm/examples/chat_opinion/sim.py --llm-service openai --model gpt-4o-mini --seed $${SEED:-42} --year $${YEAR:-2026} --rounds $${ROUNDS:-8} --conversation-mode $${CONVERSATION_MODE:-normal} --pairing-strategy $${PAIRING_STRATEGY:-random} --candidate-pool-size $${CANDIDATE_POOL_SIZE:-8} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+
+# Run chat+opinion ensemble similarity sweep with optional overrides
+# Usage: make run-example-chat-opinion-ensemble START_SEED=100 N_RUNS=25 YEAR=2026 ROUNDS=8 CONVERSATION_MODE=normal PAIRING_STRATEGY=random CANDIDATE_POOL_SIZE=8 ONS_MALE=data/input/abm/names_england_wales_ons_male.csv ONS_FEMALE=data/input/abm/names_england_wales_ons_female.csv OUTPUT_ROOT=data/output/examples/chat_opinion/ensembles RUN_ID=my_sweep NO_CACHE=1 LLM_SEED=42
+run-example-chat-opinion-ensemble:
+	@RUN_ID_ARG=""; \
+	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
+	OUTPUT_ROOT_ARG=""; \
+	if [ -n "$$OUTPUT_ROOT" ]; then OUTPUT_ROOT_ARG=" --output-root $$OUTPUT_ROOT"; fi; \
+	LLM_SEED_ARG=""; \
+	if [ -n "$$LLM_SEED" ]; then LLM_SEED_ARG=" --llm-seed $$LLM_SEED"; fi; \
+	NO_CACHE_ARG=""; \
+	if [ -n "$$NO_CACHE" ]; then NO_CACHE_ARG=" --no-cache"; fi; \
+	PYTHONPATH=src python3 src/gabm/examples/chat_opinion/ensembles/similarity_sweep.py --llm-service openai --model gpt-4o-mini --start-seed $${START_SEED:-100} --n-runs $${N_RUNS:-25} --year $${YEAR:-2026} --rounds $${ROUNDS:-8} --conversation-mode $${CONVERSATION_MODE:-normal} --pairing-strategy $${PAIRING_STRATEGY:-random} --candidate-pool-size $${CANDIDATE_POOL_SIZE:-8} --ons-male-file $${ONS_MALE:-data/input/abm/names_england_wales_ons_male.csv} --ons-female-file $${ONS_FEMALE:-data/input/abm/names_england_wales_ons_female.csv}$$OUTPUT_ROOT_ARG$$RUN_ID_ARG$$NO_CACHE_ARG$$LLM_SEED_ARG
+
+# Compare two ensemble sweep directories and write aggregate difference report
+# Usage: make compare-ensemble-sweeps SWEEP_A=data/output/examples/chat/ensembles/chat_small_01 SWEEP_B=data/output/examples/chat/ensembles/chat_hpc_01 LABEL_A=hosted LABEL_B=hpc OUTPUT_ROOT=data/output/examples/ensembles/compare RUN_ID=chat_compare_01
+compare-ensemble-sweeps:
+	@if [ -z "$(SWEEP_A)" ] || [ -z "$(SWEEP_B)" ]; then \
+		echo "Error: SWEEP_A and SWEEP_B must be set."; \
+		echo "Usage: make compare-ensemble-sweeps SWEEP_A=<dir> SWEEP_B=<dir> [LABEL_A=hosted] [LABEL_B=hpc] [OUTPUT_ROOT=...] [RUN_ID=...]"; \
+		exit 1; \
+	fi; \
+	RUN_ID_ARG=""; \
+	if [ -n "$$RUN_ID" ]; then RUN_ID_ARG=" --run-id $$RUN_ID"; fi; \
+	OUTPUT_ROOT_ARG=""; \
+	if [ -n "$$OUTPUT_ROOT" ]; then OUTPUT_ROOT_ARG=" --output-root $$OUTPUT_ROOT"; fi; \
+	PYTHONPATH=src python3 src/gabm/examples/ensembles/compare_sweeps.py --sweep-a "$(SWEEP_A)" --sweep-b "$(SWEEP_B)" --label-a "$${LABEL_A:-sweep_a}" --label-b "$${LABEL_B:-sweep_b}"$$OUTPUT_ROOT_ARG$$RUN_ID_ARG
 
 # Compare two chat example runs by diffing their captured artifacts.
 # Usage: make compare-example-chat RUN_A=seed42_run1 RUN_B=seed42_run2 [OUTPUT_ROOT=data/output/examples/chat]

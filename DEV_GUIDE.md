@@ -176,6 +176,7 @@ Default ONS input paths are expected under `data/input/abm/`.
 Reproducibility requirements for simulation tests:
 - Prefer deterministic behavior by explicitly setting random seeds.
 - Avoid hidden randomness from global state; use local RNG objects where practical.
+- When generating multiple stochastic dimensions (for example traits and interests), derive separate deterministic seeds to avoid unintended cross-coupling while preserving reproducibility.
 - Validate output reproducibility by running the same simulation twice with the same seed and asserting identical outputs.
 - Where useful, also assert that changing the seed changes the output.
 
@@ -193,6 +194,7 @@ When adding or updating a simulation example, check the following:
 - Simulation logic is in `src/gabm/examples/<example_name>/sim.py` and is importable.
 - Test logic is in `tests/src/gabm/examples/<example_name>/test_sim.py`.
 - A fixed seed is used for deterministic test runs.
+- Independent random streams are used where separate stochastic processes are modeled (for example traits vs interests).
 - Running the same simulation twice with the same seed gives identical outputs.
 - Changing the seed is tested and expected to change outputs (where randomness is intended).
 - Output paths for tests are explicit and under `tests/src/gabm/examples/.../output/` or `tmp_path`.

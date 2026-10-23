@@ -46,7 +46,7 @@ done
 ) > $MEMORY_LOG &
 MONITOR_PID=$!
 
-MODEL_DIR="/users/$USER/.cache/huggingface/hub/Apertus-v1.5-70B"
+MODEL_DIR="${MODEL_DIR:-/users/$USER/.cache/huggingface/hub/Apertus-v1.5-70B}"
 echo "=== MODEL_DIR ==="
 echo $MODEL_DIR
 
