@@ -35,13 +35,13 @@
 # The following are Slurm parameters to request resources and direct output
 # "LLM-" job-name prefix is wanted for LLM jobs (Research Computing policy).
 #SBATCH --job-name=LLM-gabm-run
-#SBATCH --partition=gpu_hopper
+#SBATCH --partition=calder-gpu-hopper
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
-#SBATCH --time=48:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 
@@ -65,7 +65,7 @@ MODEL_NAME="Apertus-v1.5-70B"
 # apptainer pull docker://vllm/vllm-openai
 SIF_FILE="apertus15.sif"
 #SIF_FILE="vllm-openai_latest.sif"
-WORKING_DIR="/scratch-calder/calder-uat/geoagdt/gabm"
+WORKING_DIR="/flash-calder/users/geoagdt/gabm"
 #WORKING_DIR="/users/geoagdt/gabm"
 SEED="42"
 #CONDA_ENV="test-cag"
