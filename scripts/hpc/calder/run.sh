@@ -17,30 +17,31 @@
 # HOW TO RUN IT:
 #   1. Download the LLM model you want to use.
 #   2. Download a vLLM apptainer sif file to use.
-#   3. Download Climate-Action-GABM and set up a virtual environment as per the User Guide
+#   3. Download GABM and set up a virtual environment as per the User Guide
 # 
 # Here is an example command:
-# sbatch scripts/calder/run.sh --model Qwen3-14B --working-dir /scratch-calder/calder-uat/geoagdt/gabm --sif vllm-openai_latest.sif --conda-env test-cag --preset tier1 --exposure-targets committed_minority_15 --days 52 --broadcasts-a 1 --broadcasts-b 2 --peer-fanout-mode degree --peer-fanout-budget additive --network-type barabasi_albert --network-params '{"m":2}' --reach-a 0.25 --reach-b 1.0 --seed 42
+# sbatch scripts/hpc/calder/run.sh --model Qwen3-14B --working-dir /scratch-calder/calder-uat/geoagdt/gabm --sif vllm-openai_latest.sif --conda-env gabm --example chat --year 2026 --seed 42
 #
 # --model if not specified is the Qwen3-14B model
-# --working-dir is a directory location where the sif file is located and where results will be written in a cag_runs folder
+# --working-dir is a directory location where the sif file is located and where results will be written in a gabm_runs folder
 # --sif is the name of the sif file to use
 # --conda-env is the name of the conda enviornment to activate
-# Other parameters are passed in the cag run command.
+# --example is one of: chat, chat_opinion, chat_ensemble, chat_opinion_ensemble
+# Other parameters are passed in the selected example command.
 #
-# To restart a run the user must pass --resume and detail the --outdir for example:
-# sbatch scripts/calder/run.sh --model Qwen3-14B --working-dir /scratch-calder/calder-uat/geoagdt/gabm --sif vllm-openai_latest.sif --conda-env test-cag --preset tier1 --exposure-targets committed_minority_15 --days 52 --broadcasts-a 1 --broadcasts-b 2 --peer-fanout-mode degree --peer-fanout-budget additive --network-type barabasi_albert --network-params '{"m":2}' --reach-a 0.25 --reach-b 1.0 --seed 42 --resume --outdir /scratch-calder/calder-uat/geoagdt/gabm/cag_runs/run_4751
+# To restart a run, pass a previous --outdir value, for example:
+# sbatch scripts/hpc/calder/run.sh --model Qwen3-14B --working-dir /scratch-calder/calder-uat/geoagdt/gabm --sif vllm-openai_latest.sif --conda-env gabm --example chat --year 2026 --seed 42 --outdir /scratch-calder/calder-uat/geoagdt/gabm/gabm_runs/run_4751
 #
 # The following are Slurm parameters to request resources and direct output
 # "LLM-" job-name prefix is wanted for LLM jobs (Research Computing policy).
 #SBATCH --job-name=LLM-gabm-run
-#SBATCH --partition=calder-gpu-hopper
+#SBATCH --partition=gpu_hopper
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --gpus-per-node=4
 #SBATCH --cpus-per-task=32
 #SBATCH --mem=256G
-#SBATCH --time=01:00:00
+#SBATCH --time=48:00:00
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 
@@ -64,11 +65,16 @@ MODEL_NAME="Apertus-v1.5-70B"
 # apptainer pull docker://vllm/vllm-openai
 SIF_FILE="apertus15.sif"
 #SIF_FILE="vllm-openai_latest.sif"
-WORKING_DIR="/flash-calder/users/geoagdt/gabm"
+WORKING_DIR="/scratch-calder/calder-uat/geoagdt/gabm"
 #WORKING_DIR="/users/geoagdt/gabm"
 SEED="42"
 #CONDA_ENV="test-cag"
 CONDA_ENV="gabm"
+EXAMPLE_MODE="chat"
+YEAR="2026"
+ROUNDS="8"
+START_SEED="42"
+N_RUNS="5"
 
 # Check Arguments
 CLI_ARGS=()
@@ -93,6 +99,31 @@ while [[ $# -gt 0 ]]; do
     --conda-env)
       [[ -z "$2" ]] && { echo "Missing value for --conda-env"; exit 1; }
       CONDA_ENV="$2"
+      shift 2
+      ;;
+    --example)
+      [[ -z "$2" ]] && { echo "Missing value for --example"; exit 1; }
+      EXAMPLE_MODE="$2"
+      shift 2
+      ;;
+    --year)
+      [[ -z "$2" ]] && { echo "Missing value for --year"; exit 1; }
+      YEAR="$2"
+      shift 2
+      ;;
+    --rounds)
+      [[ -z "$2" ]] && { echo "Missing value for --rounds"; exit 1; }
+      ROUNDS="$2"
+      shift 2
+      ;;
+    --start-seed)
+      [[ -z "$2" ]] && { echo "Missing value for --start-seed"; exit 1; }
+      START_SEED="$2"
+      shift 2
+      ;;
+    --n-runs)
+      [[ -z "$2" ]] && { echo "Missing value for --n-runs"; exit 1; }
+      N_RUNS="$2"
       shift 2
       ;;
     *)
@@ -265,11 +296,69 @@ do
   sleep 10
 done
 
-# Run gabm
-PYTHONPATH=src python -m cag \
-  --provider local \
-  --model ${MODEL_NAME} \
-  --base-url "${BASE_URL}" \
-  --outdir "${OUTDIR}" \
-  "${CLI_ARGS[@]}"
+# Run GABM against local vLLM OpenAI-compatible endpoint.
+export OPENAI_BASE_URL="${BASE_URL}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-local}"
+
+ONS_MALE_FILE="${REPO_DIR}/data/input/abm/names_england_wales_ons_male.csv"
+ONS_FEMALE_FILE="${REPO_DIR}/data/input/abm/names_england_wales_ons_female.csv"
+
+case "${EXAMPLE_MODE}" in
+  chat)
+    PYTHONPATH=src python3 src/gabm/examples/chat/sim.py \
+      --llm-service openai \
+      --model "${MODEL_NAME}" \
+      --api-key "${OPENAI_API_KEY}" \
+      --seed "${SEED}" \
+      --year "${YEAR}" \
+      --ons-male-file "${ONS_MALE_FILE}" \
+      --ons-female-file "${ONS_FEMALE_FILE}" \
+      --output-root "${OUTDIR}" \
+      --run-id "chat_seed${SEED}"
+    ;;
+  chat_opinion)
+    PYTHONPATH=src python3 src/gabm/examples/chat_opinion/sim.py \
+      --llm-service openai \
+      --model "${MODEL_NAME}" \
+      --api-key "${OPENAI_API_KEY}" \
+      --seed "${SEED}" \
+      --year "${YEAR}" \
+      --rounds "${ROUNDS}" \
+      --ons-male-file "${ONS_MALE_FILE}" \
+      --ons-female-file "${ONS_FEMALE_FILE}" \
+      --output-root "${OUTDIR}" \
+      --run-id "chat_opinion_seed${SEED}"
+    ;;
+  chat_ensemble)
+    PYTHONPATH=src python3 src/gabm/examples/chat/ensembles/similarity_sweep.py \
+      --llm-service openai \
+      --model "${MODEL_NAME}" \
+      --api-key "${OPENAI_API_KEY}" \
+      --start-seed "${START_SEED}" \
+      --n-runs "${N_RUNS}" \
+      --year "${YEAR}" \
+      --ons-male-file "${ONS_MALE_FILE}" \
+      --ons-female-file "${ONS_FEMALE_FILE}" \
+      --output-root "${OUTDIR}" \
+      --run-id "chat_ensemble_seed${START_SEED}_n${N_RUNS}"
+    ;;
+  chat_opinion_ensemble)
+    PYTHONPATH=src python3 src/gabm/examples/chat_opinion/ensembles/similarity_sweep.py \
+      --llm-service openai \
+      --model "${MODEL_NAME}" \
+      --api-key "${OPENAI_API_KEY}" \
+      --start-seed "${START_SEED}" \
+      --n-runs "${N_RUNS}" \
+      --year "${YEAR}" \
+      --rounds "${ROUNDS}" \
+      --ons-male-file "${ONS_MALE_FILE}" \
+      --ons-female-file "${ONS_FEMALE_FILE}" \
+      --output-root "${OUTDIR}" \
+      --run-id "chat_opinion_ensemble_seed${START_SEED}_n${N_RUNS}"
+    ;;
+  *)
+    echo "Unsupported --example value '${EXAMPLE_MODE}'. Use one of: chat, chat_opinion, chat_ensemble, chat_opinion_ensemble"
+    exit 1
+    ;;
+esac
 
