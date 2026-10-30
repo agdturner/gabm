@@ -3,6 +3,7 @@
 
 ## Table of Contents
 - [Overview](#overview)
+- [Resume This Workstream](#resume-this-workstream)
 - [Contributing and Communicating](#contributing-and-communicating)
 - [Project Directories](#project-directories)
 - [Testing](#testing)
@@ -28,6 +29,24 @@ The GABM developer guide provides guidance for developers some of which are also
 Please follow the [Developer Quick Start Guide](DEV_QUICKSTART.md) to get set up to contribute as a developer.
 
 In the rest of the document "you" means you as a GABM developer.
+
+
+## Resume This Workstream
+
+If you are resuming Calder/HPC reproducibility and release-prep work after a break, start here:
+
+- Release checklist and evidence gates: [RELEASE_PREP_0.3.0.md](RELEASE_PREP_0.3.0.md)
+- Qwen3-14B reproducibility protocol and results template: [REPRODUCIBILITY_QWEN3_14B.md](REPRODUCIBILITY_QWEN3_14B.md)
+- Calder concurrent launcher (single server, many clients): [scripts/hpc/calder/run_chat_concurrency.sh](scripts/hpc/calder/run_chat_concurrency.sh)
+- Run-to-run determinism comparator: [scripts/hpc/calder/compare_chat_runs.sh](scripts/hpc/calder/compare_chat_runs.sh)
+- Markdown row generator for stress-summary tables: [scripts/hpc/calder/generate_concurrency_rows.sh](scripts/hpc/calder/generate_concurrency_rows.sh)
+
+Suggested quick restart steps:
+
+1. Confirm queued/completed Calder job IDs and run directories.
+2. For determinism checks, compare paired runs with `compare_chat_runs.sh`.
+3. For stress-summary updates, generate table rows with `generate_concurrency_rows.sh` and paste into [REPRODUCIBILITY_QWEN3_14B.md](REPRODUCIBILITY_QWEN3_14B.md).
+4. Update release evidence notes in [RELEASE_PREP_0.3.0.md](RELEASE_PREP_0.3.0.md).
 
 
 ## Contributing and Communicating
