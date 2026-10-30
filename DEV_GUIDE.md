@@ -36,6 +36,7 @@ In the rest of the document "you" means you as a GABM developer.
 If you are resuming Calder/HPC reproducibility and release-prep work after a break, start here:
 
 - Release checklist and evidence gates: [RELEASE_PREP_0.3.0.md](RELEASE_PREP_0.3.0.md)
+- End-of-week snapshot/handover note: [HANDOVER_2026-10-30.md](HANDOVER_2026-10-30.md)
 - Qwen3-14B reproducibility protocol and results template: [REPRODUCIBILITY_QWEN3_14B.md](REPRODUCIBILITY_QWEN3_14B.md)
 - Calder concurrent launcher (single server, many clients): [scripts/hpc/calder/run_chat_concurrency.sh](scripts/hpc/calder/run_chat_concurrency.sh)
 - Run-to-run determinism comparator: [scripts/hpc/calder/compare_chat_runs.sh](scripts/hpc/calder/compare_chat_runs.sh)
