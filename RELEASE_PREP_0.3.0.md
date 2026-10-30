@@ -2,6 +2,10 @@
 
 This checklist supports a release decision after hosted-vs-HPC comparison runs are complete.
 
+Companion reproducibility protocol:
+
+- `REPRODUCIBILITY_QWEN3_14B.md`
+
 ## 1) Evidence Collection (Hosted vs HPC)
 
 Run small and medium sweeps for both `chat` and `chat_opinion`:
@@ -15,6 +19,12 @@ Run small and medium sweeps for both `chat` and `chat_opinion`:
 Compare sweep outputs:
 
 - `make compare-ensemble-sweeps SWEEP_A=... SWEEP_B=... LABEL_A=hosted LABEL_B=hpc RUN_ID=...`
+
+Collect Qwen3-14B reproducibility evidence:
+
+- run E1 to E4 experiments from `REPRODUCIBILITY_QWEN3_14B.md`
+- archive transcript exact-match summaries from `scripts/hpc/calder/compare_chat_runs.sh`
+- archive concurrency summaries (`FAILED_RUNS`, completion rates)
 
 Archive for release notes:
 
